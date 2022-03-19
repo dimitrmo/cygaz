@@ -1,5 +1,28 @@
 # Cyprus Gas Prices
+
 Directly from the source https://eforms.eservices.cyprus.gov.cy/MCIT/MCIT/PetroleumPrices
+
+## Environment parameters
+
+`TIMEOUT=600000 HOST=0.0.0.0 PORT=8080 ./cygaz`
+
+### Timeout
+
+Timeout in milliseconds
+
+`TIMEOUT=600000`
+
+### Host
+
+Address host
+
+`HOST=0.0.0.0`
+
+### PORT
+
+Address port
+
+`PORT=8080`
 
 ## Endpoints
 
@@ -31,15 +54,15 @@ Directly from the source https://eforms.eservices.cyprus.gov.cy/MCIT/MCIT/Petrol
 #### Response
 
     {
-        "updated_at":1647710214169,
+        "updated_at": 1647710214169,
         "petroleum_type": 4,
-        "stations":[{
-            "brand": "Brand1",
+        "stations": [{
+            "brand": "Brand_1",
             "offline": false,
             "company": "Some company TD",
             "address": "Some address",
             "latitude": "30.0000",
-            "longitude":"30.0000",
+            "longitude": "30.0000",
             "area": "Strovolos",
             "price": 1.000
         }, ...]

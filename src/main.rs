@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use actix_web::{get, App, HttpResponse, HttpServer, Responder, HttpRequest, web};
 use actix_web::body::BoxBody;
 use cygaz_lib::{fetch_prices, PETROLEUM_TYPE, PetroleumStation};
-use serde::Serialize;
+use serde::{Deserialize,Serialize};
 use log::{info, debug};
 
 #[derive(Clone, Serialize)]
@@ -13,7 +13,18 @@ struct PriceList {
     stations: Box<Vec<PetroleumStation>>,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+struct Config {
+    #[serde(default="default_port")]
+    port: u16,
+    #[serde(default="default_host")]
+    host: String,
+    #[serde(default="default_timeout")]
+    timeout: u32,
+}
+
 struct AppStateWithPrices {
+    config: Config,
     unlead95: Mutex<PriceList>,
     unlead98: Mutex<PriceList>,
     diesel_heat: Mutex<PriceList>,
@@ -31,14 +42,14 @@ impl Responder for PriceList {
     }
 }
 
-async fn fetch_petroleum(petroleum_type: u32, lock: LockResult<MutexGuard<'_, PriceList>>) -> PriceList {
+async fn fetch_petroleum(petroleum_type: u32, timeout: u32, lock: LockResult<MutexGuard<'_, PriceList>>) -> PriceList {
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let epoch_updated_at = epoch.unwrap().as_millis();
     let mut petroleum_list = lock.unwrap();
     let petr_stations = petroleum_list.stations.clone();
     let petr_updated_at = petroleum_list.updated_at;
 
-    if epoch_updated_at - petr_updated_at > 600000 { // over 10 minutes
+    if epoch_updated_at - petr_updated_at > timeout as u128 { // over 10 minutes
         debug!("fetching {} {}-{}={}",
             petroleum_type, epoch_updated_at, petr_updated_at, epoch_updated_at - petr_updated_at);
         let stations = fetch_prices(petroleum_type).await;
@@ -52,27 +63,27 @@ async fn fetch_petroleum(petroleum_type: u32, lock: LockResult<MutexGuard<'_, Pr
 
 #[get("/prices/1")]
 async fn unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.config.timeout, data.unlead95.lock()).await
 }
 
 #[get("/prices/2")]
 async fn unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.config.timeout, data.unlead98.lock()).await
 }
 
 #[get("/prices/3")]
 async fn diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.config.timeout, data.diesel_heat.lock()).await
 }
 
 #[get("/prices/4")]
 async fn diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.config.timeout, data.diesel_auto.lock()).await
 }
 
 #[get("/prices/5")]
 async fn kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["KEROSENE"], data.kerosene.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["KEROSENE"], data.config.timeout, data.kerosene.lock()).await
 }
 
 #[get("/version")]
@@ -81,13 +92,26 @@ async fn version() -> impl Responder {
     VERSION
 }
 
+fn default_port() -> u16 {
+    8080
+}
+
+fn default_host() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_timeout() -> u32 {
+    600000
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
+    let config = envy::from_env::<Config>().unwrap();
+
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-    let updated_at = epoch.unwrap().as_millis();
-    info!("warming up cache");
+    info!("warming up cache [{:?}]", config);
 
     debug!("warming up unlead 95");
     let unlead95_stations = fetch_prices(PETROLEUM_TYPE["UNLEAD_95"]).await;
@@ -109,7 +133,10 @@ async fn main() -> std::io::Result<()> {
     let kerosene_stations = fetch_prices(PETROLEUM_TYPE["KEROSENE"]).await;
     debug!("kerosene cached");
 
+    let updated_at = epoch.unwrap().as_millis();
+
     let data = web::Data::new(AppStateWithPrices{
+        config: config.clone(),
         unlead95: Mutex::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["UNLEAD_95"],
             updated_at,
@@ -137,7 +164,7 @@ async fn main() -> std::io::Result<()> {
         }),
     });
 
-    info!("running at port 8080");
+    info!("running at port {}", config.port);
 
     HttpServer::new(move || {
         App::new()
@@ -149,7 +176,7 @@ async fn main() -> std::io::Result<()> {
             .service(kerosene)
             .service(version)
     })
-        .bind(("0.0.0.0", 8080))?
+        .bind((config.host, config.port))?
         .run()
         .await
 }

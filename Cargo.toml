@@ -12,3 +12,4 @@ cygaz-lib = { path = "cygaz-lib" }
 actix-web = "4"
 serde_json = "1.0"
 log = "0.4.14"
+envy = "0.4.2"
