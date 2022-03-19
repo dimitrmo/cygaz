@@ -1,3 +1,5 @@
+VERSION=$(shell cargo pkgid | cut -d\# -f2 | cut -d: -f2)
+
 .PHONY: prod
 prod:
 	cargo build --release
@@ -11,8 +13,8 @@ run: prod
 
 .PHONY: docker-build
 docker-build:
-	docker build --squash -t cygaz:latest .
+	docker build --squash -t cygaz:${VERSION} .
 
 .PHONY: docker-run
 docker-run:
-	docker run --rm -it -p 18080:8080 cygaz:latest
+	docker run --rm -it -p 18080:8080 cygaz:${VERSION}
