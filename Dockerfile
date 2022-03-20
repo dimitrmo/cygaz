@@ -12,6 +12,8 @@ RUN apt-get update && \
     update-ca-certificates
 COPY --from=builder /usr/local/cargo/bin/cygaz /usr/local/bin/cygaz
 
+LABEL org.opencontainers.image.description="Cyprus Gas Prices"
+
 ENV TIMEOUT     600000
 ENV HOST        0.0.0.0
 ENV PORT        8080
