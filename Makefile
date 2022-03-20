@@ -13,7 +13,7 @@ run: prod
 
 .PHONY: docker-build
 docker-build:
-	docker build --squash --no-cache -t cygaz:${VERSION} .
+	docker build --squash -t cygaz:${VERSION} .
 
 .PHONY: docker-run
 docker-run:
