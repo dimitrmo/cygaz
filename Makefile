@@ -8,13 +8,13 @@ prod:
 
 .PHONY: run
 run: prod
-	RUST_LOG=cygaz=info \
+	RUST_LOG=cygaz=debug \
 		./target/release/cygaz
 
 .PHONY: docker-build
 docker-build:
-	docker build --squash -t cygaz:${VERSION} .
+	docker build --squash --no-cache -t cygaz:${VERSION} .
 
 .PHONY: docker-run
 docker-run:
-	docker run --rm -it -p 18080:8080 cygaz:${VERSION}
+	docker run --rm -it -p 18080:8080 -e RUST_LOG=cygaz=debug cygaz:${VERSION}
