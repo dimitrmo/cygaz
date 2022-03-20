@@ -51,7 +51,7 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> (String, String, St
     (address, coordinates[0].to_string(), coordinates[1].to_string())
 }
 
-pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Vec<PetroleumStation>> {
+pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Result<Vec<PetroleumStation>, String>> {
     async move {
         let client = reqwest::Client::builder()
             .cookie_store(true)
@@ -63,12 +63,12 @@ pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Vec<PetroleumSt
             .send()
             .await;
         if response.is_err() {
-            return Vec::new();
+            return Err(response.unwrap_err().to_string());
         }
 
         let body = response.unwrap().text().await;
         if body.is_err() {
-            return Vec::new();
+            return Err(body.unwrap_err().to_string());
         }
 
         let document = Html::parse_fragment(body.unwrap().as_str());
@@ -91,12 +91,12 @@ pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Vec<PetroleumSt
             .send()
             .await;
         if prices_response.is_err() {
-            return Vec::new();
+            return Err(prices_response.unwrap_err().to_string());
         }
 
         let prices_body = prices_response.unwrap().text().await;
         if prices_body.is_err() {
-            return Vec::new();
+            return Err(prices_body.unwrap_err().to_string());
         }
 
         let mut stations: Vec<PetroleumStation> = Vec::new();
@@ -145,7 +145,7 @@ pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Vec<PetroleumSt
             }
         }
 
-        stations
+        Ok(stations)
     }
 }
 
