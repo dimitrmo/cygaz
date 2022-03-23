@@ -7,6 +7,7 @@ tag:
 .PHONY: prod
 prod:
 	cargo build --release
+	ls -lah target/release/cygaz
 	upx -9 target/release/cygaz
 	ls -lah target/release/cygaz
 

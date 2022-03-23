@@ -15,5 +15,6 @@ log = "0.4.14"
 envy = "0.4.2"
 
 [profile.release]
+strip = "debuginfo"
 opt-level = 's'  # Optimize for size.
 lto = true # Link Time Optimization (LTO)

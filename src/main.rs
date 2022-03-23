@@ -4,7 +4,7 @@ use actix_web::{get, App, HttpResponse, HttpServer, Responder, HttpRequest, web}
 use actix_web::body::BoxBody;
 use cygaz_lib::{fetch_prices, PETROLEUM_TYPE, PetroleumStation};
 use serde::{Deserialize,Serialize};
-use log::{info, debug, warn};
+use log::{info, debug};
 
 #[derive(Clone, Serialize)]
 struct PriceList {
@@ -21,6 +21,18 @@ impl PriceList {
             stations: Box::new(vec![]),
         }
     }
+}
+
+fn default_port() -> u16 {
+    8080
+}
+
+fn default_host() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_timeout() -> u32 {
+    600000
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -56,7 +68,7 @@ async fn fetch_petroleum(petroleum_type: u32, timeout: u32, lock: LockResult<Mut
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let epoch_updated_at = epoch.unwrap().as_millis();
     if lock.is_err() {
-        PriceList::empty(petroleum_type, epoch_updated_at)
+        return PriceList::empty(petroleum_type, epoch_updated_at);
     }
 
     let mut petroleum_list = lock.unwrap();
@@ -64,21 +76,19 @@ async fn fetch_petroleum(petroleum_type: u32, timeout: u32, lock: LockResult<Mut
     let petr_updated_at = petroleum_list.updated_at;
 
     if epoch_updated_at - petr_updated_at <= timeout as u128 { // less than 10 minutes
-        PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations }
+        return PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations };
     }
 
     debug!("fetching {} {}-{}={}",
         petroleum_type, epoch_updated_at, petr_updated_at, epoch_updated_at - petr_updated_at);
 
     let stations = fetch_prices(petroleum_type).await;
-    if stations.is_err() {
-        PriceList::empty(petroleum_type, petr_updated_at)
-    }
-
-    let stations_unwrapped = stations.unwrap();
-    if stations.is_err() {
-        PriceList::empty(petroleum_type, petr_updated_at)
-    }
+    let stations_unwrapped = match stations {
+        Ok(val) => val,
+        Err(_) => {
+            return PriceList::empty(petroleum_type, petr_updated_at)
+        },
+    };
 
     debug!("found {} station/prices for {}", stations_unwrapped.len(), petroleum_type);
 
@@ -122,18 +132,6 @@ async fn kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
 async fn version() -> impl Responder {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     VERSION
-}
-
-fn default_port() -> u16 {
-    8080
-}
-
-fn default_host() -> String {
-    "0.0.0.0".to_string()
-}
-
-fn default_timeout() -> u32 {
-    600000
 }
 
 #[actix_web::main]
