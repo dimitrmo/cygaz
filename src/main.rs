@@ -13,6 +13,16 @@ struct PriceList {
     stations: Box<Vec<PetroleumStation>>,
 }
 
+impl PriceList {
+    fn empty(petroleum_type: u32, updated_at: u128) -> Self {
+        PriceList{
+            petroleum_type,
+            updated_at,
+            stations: Box::new(vec![]),
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 struct Config {
     #[serde(default="default_port")]
@@ -45,25 +55,42 @@ impl Responder for PriceList {
 async fn fetch_petroleum(petroleum_type: u32, timeout: u32, lock: LockResult<MutexGuard<'_, PriceList>>) -> PriceList {
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let epoch_updated_at = epoch.unwrap().as_millis();
+    if lock.is_err() {
+        PriceList::empty(petroleum_type, epoch_updated_at)
+    }
+
     let mut petroleum_list = lock.unwrap();
     let petr_stations = petroleum_list.stations.clone();
     let petr_updated_at = petroleum_list.updated_at;
 
-    if epoch_updated_at - petr_updated_at > timeout as u128 { // over 10 minutes
-        debug!("fetching {} {}-{}={}",
-            petroleum_type, epoch_updated_at, petr_updated_at, epoch_updated_at - petr_updated_at);
-        let stations = fetch_prices(petroleum_type).await;
-        if !stations.is_err() {
-            let stations_unwrapped = stations.unwrap();
-            debug!("found {} station/prices for {}", stations_unwrapped.len(), petroleum_type);
-            *petroleum_list = PriceList { petroleum_type, updated_at: epoch_updated_at, stations: Box::new(stations_unwrapped.clone()) };
-            return PriceList { petroleum_type, updated_at: epoch_updated_at, stations: Box::new(stations_unwrapped) };
-        } else {
-            warn!("error while fetching prices: {}", stations.unwrap_err());
-        }
+    if epoch_updated_at - petr_updated_at <= timeout as u128 { // less than 10 minutes
+        PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations }
     }
 
-    return PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations };
+    debug!("fetching {} {}-{}={}",
+        petroleum_type, epoch_updated_at, petr_updated_at, epoch_updated_at - petr_updated_at);
+
+    let stations = fetch_prices(petroleum_type).await;
+    if stations.is_err() {
+        PriceList::empty(petroleum_type, petr_updated_at)
+    }
+
+    let stations_unwrapped = stations.unwrap();
+    if stations.is_err() {
+        PriceList::empty(petroleum_type, petr_updated_at)
+    }
+
+    debug!("found {} station/prices for {}", stations_unwrapped.len(), petroleum_type);
+
+    // update local cache
+    *petroleum_list = PriceList { petroleum_type, updated_at: epoch_updated_at,
+        stations: Box::new(stations_unwrapped.clone()) };
+
+    PriceList {
+        petroleum_type,
+        updated_at: epoch_updated_at,
+        stations: Box::new(stations_unwrapped),
+    }
 }
 
 #[get("/prices/1")]
@@ -123,7 +150,6 @@ async fn main() -> std::io::Result<()> {
     if unlead95_stations.is_err() {
         panic!("error while warming up: {}", unlead95_stations.unwrap_err());
     }
-
     debug!("unlead 95 cached");
 
     debug!("warming up unlead 98");

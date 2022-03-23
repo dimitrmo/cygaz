@@ -1,5 +1,9 @@
 VERSION=$(shell cargo pkgid | cut -d\# -f2 | cut -d: -f2)
 
+.PHONY: tag
+tag:
+	git tag -a v${VERSION}
+
 .PHONY: prod
 prod:
 	cargo build --release
@@ -14,6 +18,11 @@ run: prod
 .PHONY: docker-build
 docker-build:
 	docker build --squash -t cygaz:${VERSION} .
+
+.PHONY: docker-push
+docker-push:
+	docker tag cygaz:${VERSION} rg.fr-par.scw.cloud/dimitrmo/cygaz:${VERSION}
+	docker push rg.fr-par.scw.cloud/dimitrmo/cygaz:${VERSION}
 
 .PHONY: docker-run
 docker-run:
