@@ -12,13 +12,13 @@ prod:
 	ls -lah target/release/cygaz
 
 .PHONY: run
-run: prod
+run:
 	RUST_LOG=cygaz=debug \
-		./target/release/cygaz
+		cargo run
 
 .PHONY: patch
 patch:
-	curl -X PATCH http://localhost:8080/prices/1/refresh
+	curl -X PATCH http://localhost:8080/prices/4/refresh
 
 .PHONY: docker-build
 docker-build:
