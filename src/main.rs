@@ -149,7 +149,9 @@ async fn diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
 
 #[patch("/prices/4/refresh")]
 async fn refresh_diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    refresh_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.write());
+    thread::spawn(move || {
+        refresh_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.write());
+    });
     return HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish();
 }
 
