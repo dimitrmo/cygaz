@@ -153,27 +153,27 @@ pub fn fetch_prices(petroleum_type: u32) -> impl Future<Output = Result<Vec<Petr
 mod tests {
     use crate::{PETROLEUM_TYPE, fetch_prices};
     #[tokio::test]
-    async fn unlead_95_prices_for_cyprus() {
+    async fn e2e_unlead_95_prices_for_cyprus() {
         let stations = fetch_prices(PETROLEUM_TYPE["UNLEAD_95"]).await;
         assert!(stations.len() > 0);
     }
     #[tokio::test]
-    async fn unlead_98_prices_for_cyprus() {
+    async fn e2e_unlead_98_prices_for_cyprus() {
         let stations = fetch_prices(PETROLEUM_TYPE["UNLEAD_98"]).await;
         assert!(stations.len() > 0);
     }
     #[tokio::test]
-    async fn diesel_heat_prices_for_cyprus() {
+    async fn e2e_diesel_heat_prices_for_cyprus() {
         let stations = fetch_prices(PETROLEUM_TYPE["DIESEL_HEAT"]).await;
         assert!(stations.len() > 0);
     }
     #[tokio::test]
-    async fn diesel_auto_prices_for_cyprus() {
+    async fn e2e_diesel_auto_prices_for_cyprus() {
         let stations = fetch_prices(PETROLEUM_TYPE["DIESEL_AUTO"]).await;
         assert!(stations.len() > 0);
     }
     #[tokio::test]
-    async fn kerosene_prices_for_cyprus() {
+    async fn e2e_kerosene_prices_for_cyprus() {
         let stations = fetch_prices(PETROLEUM_TYPE["KEROSENE"]).await;
         assert!(stations.len() > 0);
     }

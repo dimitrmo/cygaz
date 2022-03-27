@@ -16,6 +16,10 @@ run: prod
 	RUST_LOG=cygaz=debug \
 		./target/release/cygaz
 
+.PHONY: patch
+patch:
+	curl -X PATCH http://localhost:8080/prices/1/refresh
+
 .PHONY: docker-build
 docker-build:
 	docker build --squash -t cygaz:${VERSION} .

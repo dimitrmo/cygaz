@@ -1,7 +1,8 @@
-use std::sync::{LockResult, Mutex, MutexGuard};
+use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
-use actix_web::{get, App, HttpResponse, HttpServer, Responder, HttpRequest, web};
+use actix_web::{get, patch, App, HttpResponse, HttpServer, Responder, HttpRequest, web};
 use actix_web::body::BoxBody;
+use actix_web::http::StatusCode;
 use cygaz_lib::{fetch_prices, PETROLEUM_TYPE, PetroleumStation};
 use serde::{Deserialize,Serialize};
 use log::{info, debug};
@@ -31,27 +32,20 @@ fn default_host() -> String {
     "0.0.0.0".to_string()
 }
 
-fn default_timeout() -> u32 {
-    600000
-}
-
 #[derive(Deserialize, Clone, Debug)]
 struct Config {
     #[serde(default="default_port")]
     port: u16,
     #[serde(default="default_host")]
     host: String,
-    #[serde(default="default_timeout")]
-    timeout: u32,
 }
 
 struct AppStateWithPrices {
-    config: Config,
-    unlead95: Mutex<PriceList>,
-    unlead98: Mutex<PriceList>,
-    diesel_heat: Mutex<PriceList>,
-    diesel_auto: Mutex<PriceList>,
-    kerosene: Mutex<PriceList>,
+    unlead95: RwLock<PriceList>,
+    unlead98: RwLock<PriceList>,
+    diesel_heat: RwLock<PriceList>,
+    diesel_auto: RwLock<PriceList>,
+    kerosene: RwLock<PriceList>,
 }
 
 impl Responder for PriceList {
@@ -64,68 +58,89 @@ impl Responder for PriceList {
     }
 }
 
-async fn fetch_petroleum(petroleum_type: u32, timeout: u32, lock: LockResult<MutexGuard<'_, PriceList>>) -> PriceList {
+async fn fetch_petroleum(petroleum_type: u32, lock: LockResult<RwLockReadGuard<'_, PriceList>>) -> PriceList {
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let epoch_updated_at = epoch.unwrap().as_millis();
     if lock.is_err() {
         return PriceList::empty(petroleum_type, epoch_updated_at);
     }
 
-    let mut petroleum_list = lock.unwrap();
+    let petroleum_list = lock.unwrap();
     let petr_stations = petroleum_list.stations.clone();
     let petr_updated_at = petroleum_list.updated_at;
 
-    if epoch_updated_at - petr_updated_at <= timeout as u128 { // less than 10 minutes
-        return PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations };
-    }
+    return PriceList{ petroleum_type, updated_at: petr_updated_at, stations: petr_stations };
+}
 
-    debug!("fetching {} {}-{}={}",
-        petroleum_type, epoch_updated_at, petr_updated_at, epoch_updated_at - petr_updated_at);
+async fn refresh_petroleum(petroleum_type: u32, lock: LockResult<RwLockWriteGuard<'_, PriceList>>) {
+    let mut petroleum_list = lock.unwrap();
+    debug!("fetching {}", petroleum_type);
 
-    let stations = fetch_prices(petroleum_type).await;
-    let stations_unwrapped = match stations {
-        Ok(val) => val,
-        Err(_) => {
-            return PriceList::empty(petroleum_type, petr_updated_at)
-        },
-    };
+    let stations = fetch_prices(petroleum_type).await.unwrap_or_default();
+    debug!("found {} station/prices for {}", stations.len(), petroleum_type);
 
-    debug!("found {} station/prices for {}", stations_unwrapped.len(), petroleum_type);
+    // fetch timestamp
+    let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
+    let epoch_updated_at = epoch.unwrap().as_millis();
 
     // update local cache
     *petroleum_list = PriceList { petroleum_type, updated_at: epoch_updated_at,
-        stations: Box::new(stations_unwrapped.clone()) };
-
-    PriceList {
-        petroleum_type,
-        updated_at: epoch_updated_at,
-        stations: Box::new(stations_unwrapped),
-    }
+        stations: Box::new(stations) };
 }
 
 #[get("/prices/1")]
 async fn unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.config.timeout, data.unlead95.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.read()).await
+}
+
+#[patch("/prices/1/refresh")]
+async fn refresh_unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.write()).await;
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/prices/2")]
 async fn unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.config.timeout, data.unlead98.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.read()).await
+}
+
+#[patch("/prices/2/refresh")]
+async fn refresh_unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.write()).await;
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/prices/3")]
 async fn diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.config.timeout, data.diesel_heat.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.read()).await
+}
+
+#[patch("/prices/3/refresh")]
+async fn refresh_diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.write()).await;
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/prices/4")]
 async fn diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.config.timeout, data.diesel_auto.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.read()).await
+}
+
+#[patch("/prices/4/refresh")]
+async fn refresh_diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.write()).await;
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/prices/5")]
 async fn kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    fetch_petroleum(PETROLEUM_TYPE["KEROSENE"], data.config.timeout, data.kerosene.lock()).await
+    fetch_petroleum(PETROLEUM_TYPE["KEROSENE"], data.kerosene.read()).await
+}
+
+#[patch("/prices/5/refresh")]
+async fn refresh_kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["KEROSENE"], data.kerosene.write()).await;
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/version")]
@@ -181,28 +196,27 @@ async fn main() -> std::io::Result<()> {
     let updated_at = epoch.unwrap().as_millis();
 
     let data = web::Data::new(AppStateWithPrices{
-        config: config.clone(),
-        unlead95: Mutex::new(PriceList {
+        unlead95: RwLock::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["UNLEAD_95"],
             updated_at,
             stations: Box::new(unlead95_stations.unwrap()),
         }),
-        unlead98: Mutex::new(PriceList {
+        unlead98: RwLock::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["UNLEAD_98"],
             updated_at,
             stations: Box::new(unlead98_stations.unwrap()),
         }),
-        diesel_heat: Mutex::new(PriceList {
+        diesel_heat: RwLock::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["DIESEL_HEAT"],
             updated_at,
             stations: Box::new(diesel_heat_stations.unwrap()),
         }),
-        diesel_auto: Mutex::new(PriceList {
+        diesel_auto: RwLock::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["DIESEL_AUTO"],
             updated_at,
             stations: Box::new(diesel_auto_stations.unwrap()),
         }),
-        kerosene: Mutex::new(PriceList {
+        kerosene: RwLock::new(PriceList {
             petroleum_type: PETROLEUM_TYPE["KEROSENE"],
             updated_at,
             stations: Box::new(kerosene_stations.unwrap()),
@@ -219,6 +233,11 @@ async fn main() -> std::io::Result<()> {
             .service(diesel_heat)
             .service(diesel_auto)
             .service(kerosene)
+            .service(refresh_unlead95)
+            .service(refresh_unlead98)
+            .service(refresh_diesel_heat)
+            .service(refresh_diesel_auto)
+            .service(refresh_kerosene)
             .service(version)
     })
         .bind((config.host, config.port))?
