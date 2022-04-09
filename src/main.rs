@@ -1,12 +1,13 @@
 use actix_web::body::BoxBody;
 use actix_web::http::StatusCode;
-use actix_web::{get, patch, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, guard, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use cygaz_lib::{fetch_prices, PetroleumStation, PETROLEUM_TYPE};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 #[derive(Clone, Serialize)]
 struct PriceList {
@@ -33,12 +34,18 @@ fn default_host() -> String {
     "0.0.0.0".to_string()
 }
 
+fn default_uuid() -> String {
+    Uuid::new_v4().to_string()
+}
+
 #[derive(Deserialize, Clone, Debug)]
 struct Config {
     #[serde(default = "default_port")]
     port: u16,
     #[serde(default = "default_host")]
     host: String,
+    #[serde(default = "default_uuid")]
+    secret: String,
 }
 
 struct AppStateWithPrices {
@@ -108,25 +115,9 @@ async fn unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
     fetch_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.read())
 }
 
-#[patch("/prices/1/refresh")]
-async fn refresh_unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    thread::spawn(move || {
-        refresh_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.write());
-    });
-    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
-}
-
 #[get("/prices/2")]
 async fn unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
     fetch_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.read())
-}
-
-#[patch("/prices/2/refresh")]
-async fn refresh_unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    thread::spawn(move || {
-        refresh_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.write());
-    });
-    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
 }
 
 #[get("/prices/3")]
@@ -134,36 +125,14 @@ async fn diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
     fetch_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.read())
 }
 
-#[patch("/prices/3/refresh")]
-async fn refresh_diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    thread::spawn(move || {
-        refresh_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.write());
-    });
-    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
-}
-
 #[get("/prices/4")]
 async fn diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
     fetch_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.read())
 }
 
-#[patch("/prices/4/refresh")]
-async fn refresh_diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    thread::spawn(move || {
-        refresh_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.write());
-    });
-    return HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish();
-}
-
 #[get("/prices/5")]
 async fn kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
     fetch_petroleum(PETROLEUM_TYPE["KEROSENE"], data.kerosene.read())
-}
-
-#[patch("/prices/5/refresh")]
-async fn refresh_kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
-    refresh_petroleum(PETROLEUM_TYPE["KEROSENE"], data.diesel_auto.write());
-    return HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish();
 }
 
 #[get("/version")]
@@ -172,14 +141,48 @@ async fn version() -> impl Responder {
     VERSION
 }
 
+async fn refresh_unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    thread::spawn(move || {
+        refresh_petroleum(PETROLEUM_TYPE["UNLEAD_95"], data.unlead95.write());
+    });
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
+}
+
+async fn refresh_unlead98(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    thread::spawn(move || {
+        refresh_petroleum(PETROLEUM_TYPE["UNLEAD_98"], data.unlead98.write());
+    });
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
+}
+
+async fn refresh_diesel_heat(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    thread::spawn(move || {
+        refresh_petroleum(PETROLEUM_TYPE["DIESEL_HEAT"], data.diesel_heat.write());
+    });
+    HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish()
+}
+
+async fn refresh_diesel_auto(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    thread::spawn(move || {
+        refresh_petroleum(PETROLEUM_TYPE["DIESEL_AUTO"], data.diesel_auto.write());
+    });
+    return HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish();
+}
+
+async fn refresh_kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
+    refresh_petroleum(PETROLEUM_TYPE["KEROSENE"], data.diesel_auto.write());
+    return HttpResponse::Ok().status(StatusCode::NO_CONTENT).finish();
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     let config = envy::from_env::<Config>().unwrap();
-
+    let address = format!("{}:{}", config.host, config.port);
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-    info!("warming up cache [{:?}]", config);
+
+    info!("warming up cache");
 
     let unlead95_handler = thread::spawn(|| {
         debug!("warming up unlead 95");
@@ -242,9 +245,11 @@ async fn main() -> std::io::Result<()> {
         }),
     });
 
-    info!("running at port {}", config.port);
+    info!("running app");
 
     HttpServer::new(move || {
+        let konfig = config.clone();
+        let token = Box::leak(konfig.secret.into_boxed_str());
         App::new()
             .app_data(data.clone())
             .service(unlead95)
@@ -252,14 +257,34 @@ async fn main() -> std::io::Result<()> {
             .service(diesel_heat)
             .service(diesel_auto)
             .service(kerosene)
-            .service(refresh_unlead95)
-            .service(refresh_unlead98)
-            .service(refresh_diesel_heat)
-            .service(refresh_diesel_auto)
-            .service(refresh_kerosene)
+            .service(
+                web::resource("/prices/1/refresh")
+                    .guard(guard::Header("X-TOKEN", token))
+                    .route(web::patch().to(refresh_unlead95)),
+            )
+            .service(
+                web::resource("/prices/2/refresh")
+                    .guard(guard::Header("X-TOKEN", token))
+                    .route(web::patch().to(refresh_unlead98)),
+            )
+            .service(
+                web::resource("/prices/3/refresh")
+                    .guard(guard::Header("X-TOKEN", token))
+                    .route(web::patch().to(refresh_diesel_heat)),
+            )
+            .service(
+                web::resource("/prices/4/refresh")
+                    .guard(guard::Header("X-TOKEN", token))
+                    .route(web::patch().to(refresh_diesel_auto)),
+            )
+            .service(
+                web::resource("/prices/5/refresh")
+                    .guard(guard::Header("X-TOKEN", token))
+                    .route(web::patch().to(refresh_kerosene)),
+            )
             .service(version)
     })
-    .bind((config.host, config.port))?
+    .bind(address)?
     .run()
     .await
 }
