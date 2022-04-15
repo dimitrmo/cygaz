@@ -55,7 +55,7 @@ Address port
 
     {
         "updated_at": 1647710214169,
-        "petroleum_type": 4,
+        "petroleum_type": "DieselAuto",
         "stations": [{
             "brand": "Brand_1",
             "offline": false,
