@@ -1,18 +1,18 @@
 extern crate core;
 
-use phf::phf_map;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub static PETROLEUM_TYPE: phf::Map<&'static str, u32> = phf_map! {
-    "UNLEAD_95" => 1,
-    "UNLEAD_98" => 2,
-    "DIESEL_HEAT" => 3,
-    "DIESEL_AUTO" => 4,
-    "KEROSENE" => 5,
-};
+#[derive(Debug, Copy, Clone, Serialize)]
+pub enum PetroleumType {
+    Unlead95 = 1,
+    Unlead98 = 2,
+    DieselHeat = 3,
+    DieselAuto = 4,
+    Kerosene = 5,
+}
 
 static USER_AGENT_VALUE: &'static str =
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)";
@@ -59,7 +59,7 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> (String, String, St
     )
 }
 
-pub fn fetch_prices(petroleum_type: u32) -> Result<Vec<PetroleumStation>, String> {
+pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStation>, String> {
     let client = reqwest::blocking::Client::builder()
         .cookie_store(true)
         .build()
@@ -86,7 +86,10 @@ pub fn fetch_prices(petroleum_type: u32) -> Result<Vec<PetroleumStation>, String
     let form_data = [
         ("__RequestVerificationToken", &token.to_string()),
         ("Entity.StationCityEnum", &"All".to_string()),
-        ("Entity.PetroleumType", &petroleum_type.to_string()),
+        (
+            "Entity.PetroleumType",
+            &format!("{}", petroleum_type as i32),
+        ),
         ("Entity.StationDistrict", &"".to_string()),
     ];
 
@@ -156,30 +159,31 @@ pub fn fetch_prices(petroleum_type: u32) -> Result<Vec<PetroleumStation>, String
 
 #[cfg(test)]
 mod tests {
-    use crate::{fetch_prices, PETROLEUM_TYPE};
+    use crate::{fetch_prices, PetroleumType};
+
     #[test]
     fn e2e_unlead_95_prices_for_cyprus() {
-        let stations = fetch_prices(PETROLEUM_TYPE["UNLEAD_95"]).unwrap_or_default();
+        let stations = fetch_prices(PetroleumType::Unlead95).unwrap_or_default();
         assert!(stations.len() > 0);
     }
     #[test]
     fn e2e_unlead_98_prices_for_cyprus() {
-        let stations = fetch_prices(PETROLEUM_TYPE["UNLEAD_98"]).unwrap_or_default();
+        let stations = fetch_prices(PetroleumType::Unlead98).unwrap_or_default();
         assert!(stations.len() > 0);
     }
     #[test]
     fn e2e_diesel_heat_prices_for_cyprus() {
-        let stations = fetch_prices(PETROLEUM_TYPE["DIESEL_HEAT"]).unwrap_or_default();
+        let stations = fetch_prices(PetroleumType::DieselHeat).unwrap_or_default();
         assert!(stations.len() > 0);
     }
     #[test]
     fn e2e_diesel_auto_prices_for_cyprus() {
-        let stations = fetch_prices(PETROLEUM_TYPE["DIESEL_AUTO"]).unwrap_or_default();
+        let stations = fetch_prices(PetroleumType::DieselAuto).unwrap_or_default();
         assert!(stations.len() > 0);
     }
     #[test]
     fn e2e_kerosene_prices_for_cyprus() {
-        let stations = fetch_prices(PETROLEUM_TYPE["KEROSENE"]).unwrap_or_default();
+        let stations = fetch_prices(PetroleumType::Kerosene).unwrap_or_default();
         assert!(stations.len() > 0);
     }
 }
