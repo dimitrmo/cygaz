@@ -1,4 +1,5 @@
 FROM rust:1.60.0-bullseye as builder
+RUN apt update && apt install cmake -y
 WORKDIR /usr/src/cygaz
 COPY . .
 RUN cargo install --path .
