@@ -31,12 +31,12 @@ Address port
 #### Request
 
 `GET /version`
-    
+
     curl -i -H 'Accept: text/plain' http://localhost:8080/version
 
 #### Response
 
-    0.1.3-alpha
+    0.1.3
 
 ### Get pricing
 
