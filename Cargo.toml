@@ -16,7 +16,7 @@ envy = "0.4.2"
 uuid = { version = "1.0.0-alpha.1", features = ["serde", "v4", "fast-rng"] }
 reqwest = { version = "0.11.10", features = ["blocking"] }
 tokio = { version = "1.17.0", features = ["full"] }
-tokio-cron-scheduler = "0.6.0"
+tokio-cron-scheduler = "0.6.2"
 
 [profile.release]
 strip = "debuginfo"
