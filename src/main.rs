@@ -198,10 +198,10 @@ async fn refresh_petroleum_type(
     client.patch(endpoint).headers(headers).send().await
 }
 
-fn setup_cron(config: Arc<Config>) -> JobScheduler {
+async fn setup_cron(config: Arc<Config>) -> JobScheduler {
     debug!("setting up cron");
 
-    let sched = JobScheduler::new().unwrap();
+    let sched = JobScheduler::new().await.unwrap();
 
     if let Err(e) = sched.add(
         Job::new_async("0 1,16,31,46 * * * *", move |_uuid, _l| {
@@ -235,7 +235,7 @@ fn setup_cron(config: Arc<Config>) -> JobScheduler {
             })
         })
         .unwrap(),
-    ) {
+    ).await {
         warn!("error scheduling {:?}", e);
     }
 
@@ -315,7 +315,7 @@ async fn main() -> std::io::Result<()> {
 
     let scheduler = setup_cron(config.clone());
 
-    if let Err(e) = scheduler.start() {
+    if let Err(e) = scheduler.await.start().await {
         warn!("scheduler error {:?}", e);
     }
 
