@@ -1,4 +1,4 @@
-FROM rust:1.60.0-bullseye as builder
+FROM rust:1.68-slim-bullseye as builder
 RUN apt update && apt install cmake -y
 WORKDIR /usr/src/cygaz
 COPY . .
