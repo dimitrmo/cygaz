@@ -3,7 +3,8 @@ RUN apt-get update \
     && apt-get install -y \
       cmake \
       pkg-config \
-      libssl-dev
+      libssl-dev \
+      g++
 WORKDIR /usr/src/cygaz
 COPY . .
 RUN cargo install --path .
@@ -14,6 +15,7 @@ RUN apt-get update \
       ca-certificates \
       net-tools \
       libssl-dev \
+      g++ \
     && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
 COPY --from=builder /usr/local/cargo/bin/cygaz /usr/local/bin/cygaz
