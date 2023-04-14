@@ -143,8 +143,7 @@ async fn kerosene(data: web::Data<AppStateWithPrices>) -> impl Responder {
 
 #[get("/version")]
 async fn version() -> impl Responder {
-    const VERSION: &str = env!("CARGO_PKG_VERSION");
-    VERSION
+    env!("CARGO_PKG_VERSION")
 }
 
 async fn refresh_unlead95(data: web::Data<AppStateWithPrices>) -> impl Responder {
