@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "cygaz"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "actix-web",
  "cygaz-lib",
