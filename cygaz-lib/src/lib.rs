@@ -1,5 +1,7 @@
 extern crate core;
 
+use std::fmt::Display;
+
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,15 @@ static TOKEN_SELECTOR: &'static str = "input[name=\"__RequestVerificationToken\"
 
 static PRICES_SELECTOR: &'static str = "#petroleumPriceDetailsFootable";
 
+#[derive(Clone, Debug)]
+pub struct CyGazError(String);
+
+impl Display for CyGazError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PetroleumStation {
     brand: String,
@@ -36,9 +47,13 @@ pub struct PetroleumStation {
     price: f32,
 }
 
-fn extract_address(endpoint: &Url, fragment: &ElementRef) -> (String, String, String) {
-    let a_selector = Selector::parse("a").unwrap();
-    let a_tag = fragment.select(&a_selector).next().unwrap();
+fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
+    let a_selector = Selector::parse("a");
+    if let Err(err) = a_selector {
+        return Err(CyGazError(format!("Parse error at line {} and column {}", err.location.line, err.location.column)));
+    }
+
+    let a_tag = fragment.select(&a_selector.unwrap()).next().unwrap();
     let address = a_tag.inner_html();
     let href = a_tag.value().attr("href").unwrap();
     let url = Url::parse(endpoint.join(href).unwrap().as_str()).unwrap();
@@ -52,14 +67,14 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> (String, String, St
         coordinates = val.split(" ").collect::<Vec<_>>();
     }
 
-    (
+    Ok((
         address,
         coordinates[0].to_string(),
         coordinates[1].to_string(),
-    )
+    ))
 }
 
-pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStation>, String> {
+pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStation>, CyGazError> {
     let client = reqwest::blocking::Client::builder()
         .cookie_store(true)
         .build()
@@ -70,12 +85,12 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
         .header(USER_AGENT, USER_AGENT_VALUE)
         .send();
     if response.is_err() {
-        return Err(response.unwrap_err().to_string());
+        return Err(CyGazError(response.unwrap_err().to_string()));
     }
 
     let body = response.unwrap().text();
     if body.is_err() {
-        return Err(body.unwrap_err().to_string());
+        return Err(CyGazError(body.unwrap_err().to_string()));
     }
 
     let document = Html::parse_fragment(body.unwrap().as_str());
@@ -101,12 +116,12 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
         .form(&form_data)
         .send();
     if prices_response.is_err() {
-        return Err(prices_response.unwrap_err().to_string());
+        return Err(CyGazError(prices_response.unwrap_err().to_string()));
     }
 
     let prices_body = prices_response.unwrap().text();
     if prices_body.is_err() {
-        return Err(prices_body.unwrap_err().to_string());
+        return Err(CyGazError(prices_body.unwrap_err().to_string()));
     }
 
     let mut stations: Vec<PetroleumStation> = Vec::new();
@@ -131,7 +146,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                 // println!("company {}", company.inner_html().trim());
 
                 let address = tds.next().unwrap();
-                let (address_txt, address_lat, address_lon) = extract_address(&endpoint, &address);
+                let (address_txt, address_lat, address_lon) = extract_address(&endpoint, &address)?;
                 // println!("address {}-{}-{}", address_txt, address_lat, address_lon);
 
                 let area = tds.next().unwrap();

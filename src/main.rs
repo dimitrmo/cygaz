@@ -65,27 +65,57 @@ fn refresh_prices(
 
     let unlead95_handler = thread::spawn(|| {
         debug!("warming up unlead 95");
-        fetch_prices(PetroleumType::Unlead95).unwrap_or_default()
+        match fetch_prices(PetroleumType::Unlead95) {
+            Ok(results) => results,
+            Err(err) => {
+                debug!("Error fetching prices for unlead 95: {}", err);
+                vec![]
+            }
+        }
     });
 
     let unlead98_handler = thread::spawn(|| {
         debug!("warming up unlead 98");
-        fetch_prices(PetroleumType::Unlead98).unwrap_or_default()
+        match fetch_prices(PetroleumType::Unlead98) {
+            Ok(results) => results,
+            Err(err) => {
+                debug!("Error fetching prices for unlead 98: {}", err);
+                vec![]
+            }
+        }
     });
 
     let diesel_heat_handler = thread::spawn(|| {
         debug!("warming up diesel heat");
-        fetch_prices(PetroleumType::DieselHeat).unwrap_or_default()
+        match fetch_prices(PetroleumType::DieselHeat) {
+            Ok(results) => results,
+            Err(err) => {
+                debug!("Error fetching prices for diesel heat: {}", err);
+                vec![]
+            }
+        }
     });
 
     let diesel_auto_handler = thread::spawn(|| {
         debug!("warming up diesel auto");
-        fetch_prices(PetroleumType::DieselAuto).unwrap_or_default()
+        match fetch_prices(PetroleumType::DieselAuto) {
+            Ok(results) => results,
+            Err(err) => {
+                debug!("Error fetching prices for diesel auto: {}", err);
+                vec![]
+            }
+        }
     });
 
     let kerosene_handler = thread::spawn(|| {
         debug!("warming up kerosene");
-        fetch_prices(PetroleumType::Kerosene).unwrap_or_default()
+        match fetch_prices(PetroleumType::Kerosene) {
+            Ok(results) => results,
+            Err(err) => {
+                debug!("Error fetching prices for kerosene: {}", err);
+                vec![]
+            }
+        }
     });
 
     let unlead95_stations = unlead95_handler.join().unwrap_or_default();
