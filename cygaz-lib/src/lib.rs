@@ -50,7 +50,7 @@ pub struct PetroleumStation {
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
     let a_selector = Selector::parse("a");
     if let Err(err) = a_selector {
-        return Err(CyGazError(format!("Parse error at line {} and column {}", err.location.line, err.location.column)));
+        return Err(CyGazError(format!("Parse error {}", err)));
     }
 
     let a_tag = fragment.select(&a_selector.unwrap()).next().unwrap();
