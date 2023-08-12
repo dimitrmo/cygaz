@@ -48,12 +48,20 @@ pub struct PetroleumStation {
 }
 
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
-    let a_selector = Selector::parse("a");
-    if let Err(err) = a_selector {
-        return Err(CyGazError(format!("Parse error {}", err)));
-    }
+    let a_selector = match Selector::parse("a") {
+        Ok(selector) => selector,
+        Err(err) => {
+            return Err(CyGazError(format!("Parse error {}", err)));
+        }
+    };
 
-    let a_tag = fragment.select(&a_selector.unwrap()).next().unwrap();
+    let a_tag = match fragment.select(&a_selector).next() {
+        Some(addr) => addr,
+        None => {
+            return Err(CyGazError(format!("Select error for address {:?}", fragment.clone())));
+        }
+    };
+
     let address = a_tag.inner_html();
     let href = a_tag.value().attr("href").unwrap();
     let url = Url::parse(endpoint.join(href).unwrap().as_str()).unwrap();
@@ -146,8 +154,13 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                 // println!("company {}", company.inner_html().trim());
 
                 let address = tds.next().unwrap();
-                let (address_txt, address_lat, address_lon) = extract_address(&endpoint, &address)?;
-                // println!("address {}-{}-{}", address_txt, address_lat, address_lon);
+                let (address_txt, address_lat, address_lon) = match extract_address(&endpoint, &address) {
+                    Ok(result) => result,
+                    Err(_) => {
+                        // println!("error {}", err);
+                        continue;
+                    }
+                };
 
                 let area = tds.next().unwrap();
                 // println!("area {}", area.inner_html().trim());
@@ -155,7 +168,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                 let price = tds.next().unwrap();
                 // println!("price {}", price.inner_html().trim().parse::<f32>().unwrap());
 
-                stations.push(PetroleumStation {
+                let station = PetroleumStation {
                     brand: brand.inner_html().trim().to_string(),
                     offline: offline.is_some(),
                     company: company.inner_html().trim().to_string(),
@@ -164,7 +177,9 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     longitude: address_lon,
                     area: area.inner_html().trim().to_string(),
                     price: price.inner_html().trim().parse::<f32>().unwrap(),
-                });
+                };
+
+                stations.push(station);
             }
         }
     }
