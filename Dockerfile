@@ -1,4 +1,4 @@
-FROM rust:1.71-slim-bullseye as builder
+FROM rust:1.72-slim-bullseye as builder
 RUN apt-get update \
     && apt-get install -y \
       cmake \
