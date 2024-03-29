@@ -18,7 +18,7 @@ log = "0.4"
 envy = "0.4"
 uuid = { version = "1.8", features = ["serde", "v4", "fast-rng"] }
 reqwest = { version = "0.12", features = ["blocking"] }
-tokio = { version = "1.36", features = ["full"] }
+tokio = { version = "1.37", features = ["full"] }
 tokio-cron-scheduler = "0.10"
 
 [profile.release]
