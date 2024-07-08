@@ -4,13 +4,6 @@
 
 Directly from the source https://eforms.eservices.cyprus.gov.cy/MCIT/MCIT/PetroleumPrices
 
-## Lessons learned
-
-* Simple website scrape using scraper crate
-* Use of actix_web for a simple http-rest server
-* Use of environment variables
-* Use of cron scheduler for repetitive tasks
-
 ## Environment parameters
 
 `TIMEOUT=600000 HOST=0.0.0.0 PORT=8080 ./cygaz`
