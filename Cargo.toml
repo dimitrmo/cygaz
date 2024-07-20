@@ -20,7 +20,7 @@ uuid = { version = "1.10", features = ["serde", "v4", "fast-rng"] }
 reqwest = { version = "0.12", features = ["blocking"] }
 tokio = { version = "1.38", features = ["full"] }
 tokio-cron-scheduler = "0.10"
-chrono = "0.4.38"
+chrono = { version = "0.4" }
 
 [profile.release]
 strip = "debuginfo"

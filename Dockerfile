@@ -5,7 +5,7 @@ RUN apt-get update \
       cmake \
       pkg-config \
       libssl-dev \
-      g++ \
+      g++
 
 WORKDIR /usr/src/cygaz
 
