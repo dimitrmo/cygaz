@@ -1,6 +1,4 @@
 # Cyprus Gas Prices
-![Docker](https://github.com/dimitrmo/cygaz/actions/workflows/docker.yml/badge.svg)
-![Rust](https://github.com/dimitrmo/cygaz/actions/workflows/rust.yml/badge.svg)
 
 Directly from the source https://eforms.eservices.cyprus.gov.cy/MCIT/MCIT/PetroleumPrices
 
