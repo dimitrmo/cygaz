@@ -22,7 +22,7 @@ jobs:
       - name: Cargo install
         uses: dimitrmo/cargo-verison-action@v1.0.19
         with:
-          workspace: false
+          workspace: true
           skip-bump: true
 
       - name: Store binary
