@@ -8,12 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::{DateTime};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize)]
 struct PriceList {
     updated_at: u128,
+    updated_at_str: String,
     petroleum_type: PetroleumType,
     stations: Vec<PetroleumStation>,
 }
@@ -58,6 +60,12 @@ impl Responder for PriceList {
     }
 }
 
+fn millis_to_datetime(millis: u128) -> String {
+    let secs = (millis / 1000) as i64;
+    let datetime_utc = DateTime::from_timestamp(secs, 0).unwrap_or_default();
+    datetime_utc.format("%Y-%m-%d %H:%M:%S%.3f UTC").to_string()
+}
+
 fn refresh_prices(
     prices: web::Data<Arc<RwLock<AppStateWithPrices>>>
 ) {
@@ -65,57 +73,42 @@ fn refresh_prices(
 
     let unlead95_handler = thread::spawn(|| {
         debug!("warming up unlead 95");
-        match fetch_prices(PetroleumType::Unlead95) {
-            Ok(results) => results,
-            Err(err) => {
-                debug!("Error fetching prices for unlead 95: {}", err);
-                vec![]
-            }
-        }
+        fetch_prices(PetroleumType::Unlead95).unwrap_or_else(|err| {
+            debug!("Error fetching prices for unlead 95: {}", err);
+            vec![]
+        })
     });
 
     let unlead98_handler = thread::spawn(|| {
         debug!("warming up unlead 98");
-        match fetch_prices(PetroleumType::Unlead98) {
-            Ok(results) => results,
-            Err(err) => {
-                debug!("Error fetching prices for unlead 98: {}", err);
-                vec![]
-            }
-        }
+        fetch_prices(PetroleumType::Unlead98).unwrap_or_else(|err| {
+            debug!("Error fetching prices for unlead 98: {}", err);
+            vec![]
+        })
     });
 
     let diesel_heat_handler = thread::spawn(|| {
         debug!("warming up diesel heat");
-        match fetch_prices(PetroleumType::DieselHeat) {
-            Ok(results) => results,
-            Err(err) => {
-                debug!("Error fetching prices for diesel heat: {}", err);
-                vec![]
-            }
-        }
+        fetch_prices(PetroleumType::DieselHeat).unwrap_or_else(|err| {
+            debug!("Error fetching prices for diesel heat: {}", err);
+            vec![]
+        })
     });
 
     let diesel_auto_handler = thread::spawn(|| {
         debug!("warming up diesel auto");
-        match fetch_prices(PetroleumType::DieselAuto) {
-            Ok(results) => results,
-            Err(err) => {
-                debug!("Error fetching prices for diesel auto: {}", err);
-                vec![]
-            }
-        }
+        fetch_prices(PetroleumType::DieselAuto).unwrap_or_else(|err| {
+            debug!("Error fetching prices for diesel auto: {}", err);
+            vec![]
+        })
     });
 
     let kerosene_handler = thread::spawn(|| {
         debug!("warming up kerosene");
-        match fetch_prices(PetroleumType::Kerosene) {
-            Ok(results) => results,
-            Err(err) => {
-                debug!("Error fetching prices for kerosene: {}", err);
-                vec![]
-            }
-        }
+        fetch_prices(PetroleumType::Kerosene).unwrap_or_else(|err| {
+            debug!("Error fetching prices for kerosene: {}", err);
+            vec![]
+        })
     });
 
     let unlead95_stations = unlead95_handler.join().unwrap_or_default();
@@ -127,36 +120,42 @@ fn refresh_prices(
     // fetch timestamp
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let epoch_updated_at = epoch.unwrap().as_millis();
+    let datetime = millis_to_datetime(epoch_updated_at);
 
     let mut lock = prices.write().unwrap();
 
     lock.unlead95 = PriceList {
         petroleum_type: PetroleumType::Unlead95,
         updated_at: epoch_updated_at,
+        updated_at_str: datetime.clone(),
         stations: unlead95_stations,
     };
 
     lock.unlead98 = PriceList {
         petroleum_type: PetroleumType::Unlead98,
         updated_at: epoch_updated_at,
+        updated_at_str: datetime.clone(),
         stations: unlead98_stations,
     };
 
     lock.diesel_heat = PriceList {
         petroleum_type: PetroleumType::DieselHeat,
         updated_at: epoch_updated_at,
+        updated_at_str: datetime.clone(),
         stations: diesel_heat_stations,
     };
 
     lock.diesel_auto = PriceList {
         petroleum_type: PetroleumType::DieselAuto,
         updated_at: epoch_updated_at,
+        updated_at_str: datetime.clone(),
         stations: diesel_auto_stations,
     };
 
     lock.kerosene = PriceList {
         petroleum_type: PetroleumType::Kerosene,
         updated_at: epoch_updated_at,
+        updated_at_str: datetime.clone(),
         stations: kerosene_stations,
     };
 }
@@ -274,6 +273,7 @@ async fn main() {
 
     let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
     let updated_at = epoch.unwrap().as_millis();
+    let datetime = millis_to_datetime(updated_at);
 
     info!("warming up initial cache");
 
@@ -281,26 +281,31 @@ async fn main() {
         unlead95: PriceList {
             petroleum_type: PetroleumType::Unlead95,
             updated_at,
+            updated_at_str: datetime.clone(),
             stations: vec![],
         },
         unlead98: PriceList {
             petroleum_type: PetroleumType::Unlead98,
             updated_at,
+            updated_at_str: datetime.clone(),
             stations: vec![],
         },
         diesel_heat: PriceList {
             petroleum_type: PetroleumType::DieselHeat,
             updated_at,
+            updated_at_str: datetime.clone(),
             stations: vec![],
         },
         diesel_auto: PriceList {
             petroleum_type: PetroleumType::DieselAuto,
             updated_at,
+            updated_at_str: datetime.clone(),
             stations: vec![],
         },
         kerosene: PriceList {
             petroleum_type: PetroleumType::Kerosene,
             updated_at,
+            updated_at_str: datetime.clone(),
             stations: vec![],
         },
     })));
