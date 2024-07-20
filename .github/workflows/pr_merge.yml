@@ -59,7 +59,7 @@ jobs:
         id: verison
         uses: dimitrmo/cargo-verison-action@v1.0.19
         with:
-          workspace: false
+          workspace: true
           skip-install: true
           git-tag-version: false
 
@@ -115,7 +115,7 @@ jobs:
         id: verison
         uses: dimitrmo/cargo-verison-action@v1.0.19
         with:
-          workspace: false
+          workspace: true
           skip-install: true
           message: |
             Release %s
