@@ -1,23 +1,30 @@
 FROM rust:1.79-slim-bookworm AS builder
+
 RUN apt-get update \
     && apt-get install -y \
       cmake \
       pkg-config \
       libssl-dev \
-      g++
+      g++ \
+
 WORKDIR /usr/src/cygaz
+
 COPY . .
+
 RUN cargo install --path .
 
 FROM debian:bookworm-slim
+
 RUN apt-get update \
     && apt-get install -y \
       ca-certificates \
       net-tools \
       libssl-dev \
       g++ \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+
 RUN update-ca-certificates
+
 COPY --from=builder /usr/local/cargo/bin/cygaz /usr/local/bin/cygaz
 
 LABEL org.opencontainers.image.description="Cyprus Gas Prices"

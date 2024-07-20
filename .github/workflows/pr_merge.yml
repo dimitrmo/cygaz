@@ -1,0 +1,142 @@
+name: PR Merge
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  CI: true
+  IMAGE_NAME: "dimitrmok/cygaz"
+  CARGO_TERM_COLOR: always
+  CARGO_TAG_NAME: "GitHub Actions"
+  CARGO_TAG_EMAIL: "github-actions@github.com"
+
+permissions:
+  contents: write
+
+jobs:
+  Setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cargo install
+        uses: dimitrmo/cargo-verison-action@v1.0.19
+        with:
+          workspace: false
+          skip-bump: true
+
+      - name: Store binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-verison
+          path: ~/.cargo/bin/cargo-verison
+          retention-days: 1
+          compression-level: 9
+
+  Publish:
+    runs-on: ubuntu-latest
+    needs:
+      - Setup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Git setup
+        run: |
+          git config user.name "$CARGO_TAG_NAME"
+          git config user.email "$CARGO_TAG_EMAIL"
+
+      - name: Cargo Verison Setup
+        uses: actions/download-artifact@v4
+        with:
+          name: cargo-verison
+          path: ~/.cargo/bin/
+
+      - name: Cargo Verison permissions
+        run: chmod +x ~/.cargo/bin/cargo-verison
+
+      - name: Cargo Verison
+        id: verison
+        uses: dimitrmo/cargo-verison-action@v1.0.19
+        with:
+          workspace: false
+          skip-install: true
+          git-tag-version: false
+
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.verison.outputs.next_version }},${{ env.IMAGE_NAME }}:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  Commit:
+    runs-on: ubuntu-latest
+    needs:
+      - Publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Git setup
+        run: |
+          git config user.name "$CARGO_TAG_NAME"
+          git config user.email "$CARGO_TAG_EMAIL"
+
+      - name: Cargo Verison Setup
+        uses: actions/download-artifact@v4
+        with:
+          name: cargo-verison
+          path: ~/.cargo/bin/
+
+      - name: Cargo Verison permissions
+        run: chmod +x ~/.cargo/bin/cargo-verison
+
+      - name: Cargo Verison
+        id: verison
+        uses: dimitrmo/cargo-verison-action@v1.0.19
+        with:
+          workspace: false
+          skip-install: true
+          message: |
+            Release %s
+
+            [skip ci]
+
+      - name: Extract git branch
+        run: |
+          # Short name for current branch. For PRs, use target branch (base ref)
+          GIT_BRANCH=${GITHUB_BASE_REF:-${GITHUB_REF#refs/heads/}}
+          echo "GIT_BRANCH=$GIT_BRANCH" >> $GITHUB_ENV
+
+      - name: Git push
+        run: |
+          echo "Current branch $GIT_BRANCH"
+          git push origin $GIT_BRANCH
+          git push origin $GIT_BRANCH --tags
+
+      - name: Cleanup
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: cargo-verison
+          failOnError: false
