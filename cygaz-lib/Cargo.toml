@@ -12,9 +12,9 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 reqwest = { workspace = true }
-url = { version = "2.2", features = ["serde"] }
 serde_json = { workspace = true }
 serde = { workspace = true }
+url = { version = "2.2", features = ["serde"] }
 scraper = "0.19"
 
 [profile.release]
