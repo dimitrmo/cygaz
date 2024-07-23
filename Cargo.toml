@@ -41,7 +41,7 @@ actix-web = "4.8"
 log = "0.4"
 envy = "0.4"
 uuid = { version = "1.10", features = ["serde", "v4", "fast-rng"] }
-tokio = { version = "1.38", features = ["full"] }
+tokio = { version = "1.39", features = ["full"] }
 tokio-cron-scheduler = "0.10"
 chrono = { version = "0.4" }
 
