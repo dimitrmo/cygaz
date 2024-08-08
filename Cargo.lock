@@ -577,7 +577,7 @@ dependencies = [
 
 [[package]]
 name = "cygaz"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "actix-web",
  "chrono",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "cygaz-lib"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "reqwest",
  "scraper",
