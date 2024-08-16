@@ -1,0 +1,87 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "CyGaz",
+    "type": "object",
+    "properties": {
+        "updated_at": {
+            "description": "Last updated time in milliseconds",
+            "type": "integer",
+            "examples": [
+                1723729592807
+            ]
+        },
+        "updated_at_str": {
+            "description": "Last updated time in readable format",
+            "type": "string",
+            "examples": [
+                "2024-08-15 13:46:32.000 UTC"
+            ]
+        },
+        "petroleum_type": {
+            "description": "Type of petroleum",
+            "type": "string",
+            "enum": [
+                "Unlead95",
+                "Unlead98",
+                "DieselHeat",
+                "DieselAuto",
+                "Kerosene"
+            ]
+        },
+        "stations": {
+            "description": "List of stations",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "brand": {
+                        "type": "string",
+                        "examples": [
+                            "BP"
+                        ]
+                    },
+                    "offline": {
+                        "type": "boolean"
+                    },
+                    "company": {
+                        "type": "string",
+                        "examples": [
+                            "Company LTD"
+                        ]
+                    },
+                    "address": {
+                        "type": "string",
+                        "examples": [
+                            "Broadway Street"
+                        ]
+                    },
+                    "latitude": {
+                        "type": "string",
+                        "examples": [
+                            "40.730610"
+                        ]
+                    },
+                    "longitude": {
+                        "type": "string",
+                        "examples": [
+                            "-73.935242"
+                        ]
+                    },
+                    "area": {
+                        "type": "string",
+                        "examples": [
+                            "Soho"
+                        ]
+                    },
+                    "price": {
+                        "type": "number",
+                        "examples": [
+                            1.489
+                        ]
+                    }
+                }
+            },
+            "additionalItems": false
+        }
+    }
+}
