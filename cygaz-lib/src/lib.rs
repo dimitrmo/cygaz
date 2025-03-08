@@ -29,7 +29,7 @@ pub struct AreaInDistrict {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
 pub struct District {
     pub name: String,
     pub name_el: String,
@@ -38,6 +38,10 @@ pub struct District {
 impl District {
     pub fn new(name: String, name_el: String) -> Self {
         Self { name, name_el }
+    }
+
+    pub fn unknown() -> Self {
+        Self { name: "Unknown".to_string(), name_el: "Αγνωστο".to_string() }
     }
 }
 
@@ -83,8 +87,9 @@ pub struct PetroleumStation {
     address: String,
     latitude: String,
     longitude: String,
-    area: String,
+    pub area: String,
     price: f32,
+    pub district: Option<District>,
 }
 
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
@@ -244,6 +249,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     longitude: address_lon,
                     area: area.inner_html().trim().to_string(),
                     price: price.inner_html().trim().parse::<f32>().unwrap(),
+                    district: None,
                 };
 
                 stations.push(station);

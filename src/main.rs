@@ -94,49 +94,101 @@ async fn refresh_districts(
     lock.areas = result
 }
 
+fn find_district(
+    area: &String,
+    districts: &HashMap<String, District>
+) -> District {
+    let district = districts.get(area);
+    if district.is_some() {
+        return district.unwrap().clone()
+    }
+
+    District::unknown()
+}
+
 fn refresh_prices(
     state: web::Data<Arc<RwLock<AppState>>>
 ) {
     debug!("refreshing prices");
 
-    let unlead95_handler = thread::spawn(|| {
+    let unlead95_state = state.clone();
+    let unlead95_handler = thread::spawn(move || {
         debug!("warming up unlead 95");
-        fetch_prices(PetroleumType::Unlead95).unwrap_or_else(|err| {
+        let mut prices = fetch_prices(PetroleumType::Unlead95).unwrap_or_else(|err| {
             debug!("Error fetching prices for unlead 95: {}", err);
             vec![]
-        })
+        });
+
+        let value = unlead95_state.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &value.areas));
+        }
+
+        prices
     });
 
-    let unlead98_handler = thread::spawn(|| {
+    let unlead98_state = state.clone();
+    let unlead98_handler = thread::spawn(move || {
         debug!("warming up unlead 98");
-        fetch_prices(PetroleumType::Unlead98).unwrap_or_else(|err| {
+        let mut prices = fetch_prices(PetroleumType::Unlead98).unwrap_or_else(|err| {
             debug!("Error fetching prices for unlead 98: {}", err);
             vec![]
-        })
+        });
+
+        let value = unlead98_state.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &value.areas));
+        }
+
+        prices
     });
 
-    let diesel_heat_handler = thread::spawn(|| {
+    let diesel_heat_state = state.clone();
+    let diesel_heat_handler = thread::spawn(move || {
         debug!("warming up diesel heat");
-        fetch_prices(PetroleumType::DieselHeat).unwrap_or_else(|err| {
+        let mut prices = fetch_prices(PetroleumType::DieselHeat).unwrap_or_else(|err| {
             debug!("Error fetching prices for diesel heat: {}", err);
             vec![]
-        })
+        });
+
+        let value = diesel_heat_state.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &value.areas));
+        }
+
+        prices
     });
 
-    let diesel_auto_handler = thread::spawn(|| {
+    let diesel_auto_state = state.clone();
+    let diesel_auto_handler = thread::spawn(move || {
         debug!("warming up diesel auto");
-        fetch_prices(PetroleumType::DieselAuto).unwrap_or_else(|err| {
+        let mut prices = fetch_prices(PetroleumType::DieselAuto).unwrap_or_else(|err| {
             debug!("Error fetching prices for diesel auto: {}", err);
             vec![]
-        })
+        });
+
+        let value = diesel_auto_state.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &value.areas));
+        }
+
+        prices
     });
 
-    let kerosene_handler = thread::spawn(|| {
+    let kerosene_state = state.clone();
+    let kerosene_handler = thread::spawn(move || {
         debug!("warming up kerosene");
-        fetch_prices(PetroleumType::Kerosene).unwrap_or_else(|err| {
+        let mut prices = fetch_prices(PetroleumType::Kerosene).unwrap_or_else(|err| {
             debug!("Error fetching prices for kerosene: {}", err);
             vec![]
-        })
+        });
+
+        let value = kerosene_state.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &value.areas));
+        }
+
+        prices
     });
 
     let unlead95_stations = unlead95_handler.join().unwrap_or_default();
