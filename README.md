@@ -64,6 +64,10 @@ Address port
             "latitude": "30.0000",
             "longitude": "30.0000",
             "area": "Strovolos",
-            "price": 1.000
+            "price": 1.000,
+            "district": {
+                "name": "Nicosia",
+                "name_el": "Λευκωσία"
+            }
         }, ...]
     }
