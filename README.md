@@ -32,7 +32,7 @@ Address port
 
 `GET /districts`
 
-    curl -i -H 'Accept: text/plain' http://localhost:8080/districts
+    curl -i -H 'Accept: text/json' http://localhost:8080/districts
 
 #### Response
 
