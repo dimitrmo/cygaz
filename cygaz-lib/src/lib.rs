@@ -1,10 +1,12 @@
 extern crate core;
 
 use std::fmt::Display;
-
+use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use lazy_static::lazy_static;
 use url::Url;
 
 #[derive(Debug, Copy, Clone, Serialize)]
@@ -15,6 +17,31 @@ pub enum PetroleumType {
     DieselAuto = 4,
     Kerosene = 5,
 }
+
+lazy_static! {
+    static ref DISTRICTS: Vec<String> = {
+        let mut all: Vec<String> = vec![];
+        all.push("Famagusta".to_string());
+        all.push("Larnaca".to_string());
+        all.push("Limassol".to_string());
+        all.push("Nicosia".to_string());
+        all.push("Paphos".to_string());
+        all
+    };
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct District {
+    disabled: bool,
+    group: Option<String>,
+    selected: bool,
+    text: String,
+    value: String
+}
+
+static GET_STATION_DISTRICT_ENDPOINT: &'static str =
+    "https://eforms.eservices.cyprus.gov.cy/MCIT/MCIT/PetroleumPrices/GetStationDistrict";
 
 static USER_AGENT_VALUE: &'static str =
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)";
@@ -80,6 +107,33 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, Str
         coordinates[0].to_string(),
         coordinates[1].to_string(),
     ))
+}
+
+pub fn fetch_areas_for_district(district: String) -> Result<Vec<District>, CyGazError> {
+    let client = reqwest::blocking::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
+    let payload = json!({
+        "city": district
+    });
+
+    let response = client
+        .post(GET_STATION_DISTRICT_ENDPOINT)
+        .json(&payload)
+        .header(USER_AGENT, USER_AGENT_VALUE)
+        .send();
+    if response.is_err() {
+        return Err(CyGazError(response.unwrap_err().to_string()));
+    }
+
+    let data = response.unwrap().json::<Vec<District>>();
+    if data.is_err() {
+        return Err(CyGazError(data.unwrap_err().to_string()));
+    }
+
+    Ok(data.unwrap())
 }
 
 pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStation>, CyGazError> {
@@ -189,13 +243,24 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
 
 #[cfg(test)]
 mod tests {
-    use crate::{fetch_prices, PetroleumType};
+    use crate::{fetch_areas_for_district, fetch_prices, PetroleumType};
+
+    #[test]
+    fn e2e_fetch_areas_for_district() {
+        let response = fetch_areas_for_district("Limassol".to_string());
+        if response.is_err() {
+            println!("{:?}", response.unwrap_err())
+        }
+        let areas = fetch_areas_for_district("Limassol".to_string()).unwrap_or_default();
+        assert!(areas.len() > 0);
+    }
 
     #[test]
     fn e2e_unlead_95_prices_for_cyprus() {
         let stations = fetch_prices(PetroleumType::Unlead95).unwrap_or_default();
         assert!(stations.len() > 0);
     }
+
     #[test]
     fn e2e_unlead_98_prices_for_cyprus() {
         let stations = fetch_prices(PetroleumType::Unlead98).unwrap_or_default();

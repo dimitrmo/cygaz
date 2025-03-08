@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 url = { version = "2.5", features = ["serde"] }
 scraper = "0.23"
+lazy_static = "1.5"
 
 [profile.release]
 strip = "debuginfo"
