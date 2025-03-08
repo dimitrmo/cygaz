@@ -10,6 +10,7 @@ use std::thread;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
+use serde_json::json;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
 
@@ -240,38 +241,47 @@ fn refresh_prices(
     };
 }
 
+#[get("/districts")]
+async fn get_districts() -> impl Responder {
+    let value = serde_json::to_string(&serde_json::json!({
+        "districts": *DISTRICTS
+    })).unwrap();
+
+    value
+}
+
 #[get("/prices/1")]
-async fn unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+async fn get_unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.unlead95.clone()
 }
 
 #[get("/prices/2")]
-async fn unlead98(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+async fn get_unlead98(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.unlead98.clone()
 }
 
 #[get("/prices/3")]
-async fn diesel_heat(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+async fn get_diesel_heat(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.diesel_heat.clone()
 }
 
 #[get("/prices/4")]
-async fn diesel_auto(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+async fn get_diesel_auto(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.diesel_auto.clone()
 }
 
 #[get("/prices/5")]
-async fn kerosene(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+async fn get_kerosene(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.kerosene.clone()
 }
 
 #[get("/version")]
-async fn version() -> impl Responder {
+async fn get_version() -> impl Responder {
     env!("CARGO_PKG_VERSION")
 }
 
@@ -406,12 +416,13 @@ async fn main() {
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
-            .service(unlead95)
-            .service(unlead98)
-            .service(diesel_heat)
-            .service(diesel_auto)
-            .service(kerosene)
-            .service(version)
+            .service(get_unlead95)
+            .service(get_unlead98)
+            .service(get_diesel_heat)
+            .service(get_diesel_auto)
+            .service(get_kerosene)
+            .service(get_districts)
+            .service(get_version)
     })
         .bind(address)
         .unwrap()
