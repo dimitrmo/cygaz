@@ -26,6 +26,43 @@ Address port
 
 ## Endpoints
 
+### Get districts
+
+#### Request
+
+`GET /version`
+
+    curl -i -H 'Accept: text/plain' http://localhost:8080/districts
+
+#### Response
+
+```
+{
+    districts: [
+        {
+            name: "Famagusta",
+            name_el: "Αμμόχωστος"
+        },
+        {
+            name: "Larnaca",
+            name_el: "Λάρνακα"
+        },
+        {
+            name: "Limassol",
+            name_el: "Λεμεσός"
+        },
+        {
+            name: "Nicosia",
+            name_el: "Λευκωσία"
+        },
+        {
+            name: "Paphos",
+            name_el: "Πάφος"
+        }
+    ]
+}
+```
+
 ### Get version
 
 #### Request
