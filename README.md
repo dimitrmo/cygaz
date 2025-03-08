@@ -30,7 +30,7 @@ Address port
 
 #### Request
 
-`GET /version`
+`GET /districts`
 
     curl -i -H 'Accept: text/plain' http://localhost:8080/districts
 
