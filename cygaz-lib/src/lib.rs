@@ -18,26 +18,39 @@ pub enum PetroleumType {
     Kerosene = 5,
 }
 
-lazy_static! {
-    static ref DISTRICTS: Vec<String> = {
-        let mut all: Vec<String> = vec![];
-        all.push("Famagusta".to_string());
-        all.push("Larnaca".to_string());
-        all.push("Limassol".to_string());
-        all.push("Nicosia".to_string());
-        all.push("Paphos".to_string());
-        all
-    };
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct AreaInDistrict {
+    disabled: bool,
+    group: Option<String>,
+    selected: bool,
+    pub text: String,
+    pub value: String
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct District {
-    disabled: bool,
-    group: Option<String>,
-    selected: bool,
-    text: String,
-    value: String
+    pub name: String,
+    pub name_el: String,
+}
+
+impl District {
+    pub fn new(name: String, name_el: String) -> Self {
+        Self { name, name_el }
+    }
+}
+
+lazy_static! {
+    pub static ref DISTRICTS: Vec<District> = {
+        let mut all: Vec<District> = vec![];
+        all.push(District::new("Famagusta".to_string(), "Αμμόχωστος".to_string()));
+        all.push(District::new("Larnaca".to_string(), "Λάρνακα".to_string()));
+        all.push(District::new("Limassol".to_string(), "Λεμεσός".to_string()));
+        all.push(District::new("Nicosia".to_string(), "Λευκωσία".to_string()));
+        all.push(District::new("Paphos".to_string(), "Πάφος".to_string()));
+        all
+    };
 }
 
 static GET_STATION_DISTRICT_ENDPOINT: &'static str =
@@ -109,7 +122,7 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, Str
     ))
 }
 
-pub fn fetch_areas_for_district(district: String) -> Result<Vec<District>, CyGazError> {
+pub fn fetch_areas_for_district(district: String) -> Result<Vec<AreaInDistrict>, CyGazError> {
     let client = reqwest::blocking::Client::builder()
         .cookie_store(true)
         .build()
@@ -128,7 +141,7 @@ pub fn fetch_areas_for_district(district: String) -> Result<Vec<District>, CyGaz
         return Err(CyGazError(response.unwrap_err().to_string()));
     }
 
-    let data = response.unwrap().json::<Vec<District>>();
+    let data = response.unwrap().json::<Vec<AreaInDistrict>>();
     if data.is_err() {
         return Err(CyGazError(data.unwrap_err().to_string()));
     }
@@ -247,10 +260,6 @@ mod tests {
 
     #[test]
     fn e2e_fetch_areas_for_district() {
-        let response = fetch_areas_for_district("Limassol".to_string());
-        if response.is_err() {
-            println!("{:?}", response.unwrap_err())
-        }
         let areas = fetch_areas_for_district("Limassol".to_string()).unwrap_or_default();
         assert!(areas.len() > 0);
     }

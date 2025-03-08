@@ -1,12 +1,13 @@
 use actix_web::body::BoxBody;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use cygaz_lib::{fetch_prices, PetroleumStation, PetroleumType};
+use cygaz_lib::{District, DISTRICTS, fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
 use reqwest::header::HeaderMap;
 use reqwest::{Error, Response};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -42,12 +43,13 @@ struct Config {
     secret: String,
 }
 
-struct AppStateWithPrices {
+struct AppState {
     unlead95: PriceList,
     unlead98: PriceList,
     diesel_heat: PriceList,
     diesel_auto: PriceList,
     kerosene: PriceList,
+    areas: HashMap<String, District>
 }
 
 impl Responder for PriceList {
@@ -66,8 +68,34 @@ fn millis_to_datetime(millis: u128) -> String {
     datetime_utc.format("%Y-%m-%d %H:%M:%S%.3f UTC").to_string()
 }
 
+async fn refresh_districts(
+    state: web::Data<Arc<RwLock<AppState>>>
+) {
+    debug!("refreshing districts");
+
+    let t = thread::spawn(|| {
+        let mut output: HashMap<String, District> = HashMap::new();
+
+        for district in DISTRICTS.iter() {
+            let areas = fetch_areas_for_district(district.name.clone()).unwrap_or_default();
+            for area in areas {
+                output.insert(area.text, district.clone());
+                output.insert(area.value, district.clone());
+            }
+        }
+
+        output
+    });
+
+    let result = t.join().unwrap_or_default();
+
+    let mut lock = state.write().unwrap();
+
+    lock.areas = result
+}
+
 fn refresh_prices(
-    prices: web::Data<Arc<RwLock<AppStateWithPrices>>>
+    state: web::Data<Arc<RwLock<AppState>>>
 ) {
     debug!("refreshing prices");
 
@@ -122,7 +150,7 @@ fn refresh_prices(
     let epoch_updated_at = epoch.unwrap().as_millis();
     let datetime = millis_to_datetime(epoch_updated_at);
 
-    let mut lock = prices.write().unwrap();
+    let mut lock = state.write().unwrap();
 
     lock.unlead95 = PriceList {
         petroleum_type: PetroleumType::Unlead95,
@@ -161,31 +189,31 @@ fn refresh_prices(
 }
 
 #[get("/prices/1")]
-async fn unlead95(data: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> impl Responder {
+async fn unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.unlead95.clone()
 }
 
 #[get("/prices/2")]
-async fn unlead98(data: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> impl Responder {
+async fn unlead98(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.unlead98.clone()
 }
 
 #[get("/prices/3")]
-async fn diesel_heat(data: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> impl Responder {
+async fn diesel_heat(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.diesel_heat.clone()
 }
 
 #[get("/prices/4")]
-async fn diesel_auto(data: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> impl Responder {
+async fn diesel_auto(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.diesel_auto.clone()
 }
 
 #[get("/prices/5")]
-async fn kerosene(data: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> impl Responder {
+async fn kerosene(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.kerosene.clone()
 }
@@ -213,7 +241,7 @@ async fn refresh_petroleum_type(
     client.patch(endpoint).headers(headers).send().await
 }
 
-async fn setup_cron(config: Arc<Config>, prices: web::Data<Arc<RwLock<AppStateWithPrices>>>) -> JobScheduler {
+async fn setup_cron(config: Arc<Config>, prices: web::Data<Arc<RwLock<AppState>>>) -> JobScheduler {
     debug!("setting up cron");
 
     let sched = JobScheduler::new().await.unwrap();
@@ -277,7 +305,7 @@ async fn main() {
 
     info!("warming up initial cache");
 
-    let data = web::Data::new(Arc::new(RwLock::new(AppStateWithPrices {
+    let data = web::Data::new(Arc::new(RwLock::new(AppState {
         unlead95: PriceList {
             petroleum_type: PetroleumType::Unlead95,
             updated_at,
@@ -308,7 +336,10 @@ async fn main() {
             updated_at_str: datetime.clone(),
             stations: vec![],
         },
+        areas: HashMap::new()
     })));
+
+    refresh_districts(data.clone()).await;
 
     refresh_prices(data.clone());
 
