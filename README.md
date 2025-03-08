@@ -37,30 +37,28 @@ Address port
 #### Response
 
 ```
-{
-    districts: [
-        {
-            name: "Famagusta",
-            name_el: "Αμμόχωστος"
-        },
-        {
-            name: "Larnaca",
-            name_el: "Λάρνακα"
-        },
-        {
-            name: "Limassol",
-            name_el: "Λεμεσός"
-        },
-        {
-            name: "Nicosia",
-            name_el: "Λευκωσία"
-        },
-        {
-            name: "Paphos",
-            name_el: "Πάφος"
-        }
-    ]
-}
+[
+    {
+        "name": "Famagusta",
+        "name_el": "Αμμόχωστος"
+    },
+    {
+        "name": "Larnaca",
+        "name_el": "Λάρνακα"
+    },
+    {
+        "name": "Limassol",
+        "name_el": "Λεμεσός"
+    },
+    {
+        "name": "Nicosia",
+        "name_el": "Λευκωσία"
+    },
+    {
+        "name": "Paphos",
+        "name_el": "Πάφος"
+    }
+]
 ```
 
 ### Get version

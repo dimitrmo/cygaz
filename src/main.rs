@@ -242,11 +242,7 @@ fn refresh_prices(
 
 #[get("/districts")]
 async fn get_districts() -> impl Responder {
-    let value = serde_json::to_string(&serde_json::json!({
-        "districts": *DISTRICTS
-    })).unwrap();
-
-    value
+    actix_web::web::Json(DISTRICTS.clone())
 }
 
 #[get("/prices/1")]
