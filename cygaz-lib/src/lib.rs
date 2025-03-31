@@ -31,17 +31,19 @@ pub struct AreaInDistrict {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
 pub struct District {
-    pub name: String,
+    #[serde(rename = "district_en")]
+    pub name_en: String,
+    #[serde(rename = "district_el")]
     pub name_el: String,
 }
 
 impl District {
-    pub fn new(name: String, name_el: String) -> Self {
-        Self { name, name_el }
+    pub fn new(name_en: String, name_el: String) -> Self {
+        Self { name_en, name_el }
     }
 
     pub fn unknown() -> Self {
-        Self { name: "Unknown".to_string(), name_el: "Αγνωστο".to_string() }
+        Self { name_en: "Unknown".to_string(), name_el: "Αγνωστο".to_string() }
     }
 }
 
@@ -89,6 +91,7 @@ pub struct PetroleumStation {
     longitude: String,
     pub area: String,
     price: f32,
+    #[serde(flatten)]
     pub district: Option<District>,
 }
 

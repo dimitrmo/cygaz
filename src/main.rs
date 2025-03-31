@@ -77,7 +77,7 @@ async fn refresh_districts(
         let mut output: HashMap<String, District> = HashMap::new();
 
         for district in DISTRICTS.iter() {
-            let areas = fetch_areas_for_district(district.name.clone()).unwrap_or_default();
+            let areas = fetch_areas_for_district(district.name_en.clone()).unwrap_or_default();
             for area in areas {
                 output.insert(area.text, district.clone());
                 output.insert(area.value, district.clone());
