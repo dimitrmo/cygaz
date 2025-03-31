@@ -106,6 +106,19 @@ fn find_district(
     District::unknown()
 }
 
+fn find_areas_for_district(
+    district: &District,
+    districts: &HashMap<String, District>
+) -> Vec<String> {
+    return districts.iter().filter_map(|z| {
+        if z.1.eq(district) {
+            return Some(z.0.clone())
+        }
+
+        return None
+    }).collect();
+}
+
 fn refresh_prices(
     state: web::Data<Arc<RwLock<AppState>>>
 ) {
@@ -241,8 +254,17 @@ fn refresh_prices(
 }
 
 #[get("/districts")]
-async fn get_districts() -> impl Responder {
-    actix_web::web::Json(DISTRICTS.clone())
+async fn get_districts(
+    data: web::Data<Arc<RwLock<AppState>>>
+) -> impl Responder {
+    let state = data.read().unwrap();
+    let mut districts = DISTRICTS.clone();
+
+    for district in &mut districts {
+        district.areas = Some(find_areas_for_district(&district, &state.areas));
+    }
+
+    actix_web::web::Json(districts)
 }
 
 #[get("/prices/1")]

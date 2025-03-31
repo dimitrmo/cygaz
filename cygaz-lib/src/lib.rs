@@ -28,22 +28,23 @@ pub struct AreaInDistrict {
     pub value: String
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
 #[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
 pub struct District {
     #[serde(rename = "district_en")]
     pub name_en: String,
     #[serde(rename = "district_el")]
     pub name_el: String,
+    pub areas: Option<Vec<String>>
 }
 
 impl District {
     pub fn new(name_en: String, name_el: String) -> Self {
-        Self { name_en, name_el }
+        Self { name_en, name_el, areas: None }
     }
 
     pub fn unknown() -> Self {
-        Self { name_en: "Unknown".to_string(), name_el: "Αγνωστο".to_string() }
+        Self { name_en: "Unknown".to_string(), name_el: "Αγνωστο".to_string(), areas: None }
     }
 }
 
