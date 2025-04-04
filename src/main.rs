@@ -5,13 +5,15 @@ use log::{debug, info, warn};
 use reqwest::header::HeaderMap;
 use reqwest::{Error, Response};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
+
+static READY: OnceLock<bool> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct PriceList {
@@ -302,6 +304,16 @@ async fn get_version() -> impl Responder {
     env!("CARGO_PKG_VERSION")
 }
 
+#[get("/ready")]
+async fn get_ready() -> impl Responder {
+    let ready = *READY.get().unwrap_or(&false);
+    if ready {
+        return HttpResponse::Ok().json(serde_json::json!({ "ready": true }));
+    }
+
+    HttpResponse::BadRequest().json(serde_json::json!({ "ready": false }))
+}
+
 async fn refresh_petroleum_type(
     config: Arc<Config>,
     petroleum_type: PetroleumType,
@@ -418,9 +430,14 @@ async fn main() {
         areas: HashMap::new()
     })));
 
-    refresh_districts(data.clone()).await;
+    let prices = data.clone();
 
-    refresh_prices(data.clone());
+    tokio::spawn(async move {
+        refresh_districts(prices.clone()).await;
+        refresh_prices(prices);
+        debug!("warm up completed");
+        READY.set(true)
+    });
 
     let scheduler = setup_cron(config.clone(), data.clone());
 
@@ -440,6 +457,7 @@ async fn main() {
             .service(get_kerosene)
             .service(get_districts)
             .service(get_version)
+            .service(get_ready)
     })
         .bind(address)
         .unwrap()
