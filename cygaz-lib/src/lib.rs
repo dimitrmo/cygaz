@@ -35,6 +35,7 @@ pub struct District {
     pub name_en: String,
     #[serde(rename = "district_el")]
     pub name_el: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub areas: Option<Vec<String>>
 }
 
