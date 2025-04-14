@@ -4,18 +4,26 @@ use std::fmt::Display;
 use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeMap;
 use serde_json::json;
 use url::Url;
 use crate::districts::District;
 
-#[derive(Debug, Copy, Clone, Serialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum PetroleumType {
     Unlead95 = 1,
     Unlead98 = 2,
     DieselHeat = 3,
     DieselAuto = 4,
     Kerosene = 5,
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct PetroleumPrice {
+    p_type: PetroleumType,
+    value: f32,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -59,9 +67,21 @@ pub struct PetroleumStation {
     latitude: String,
     longitude: String,
     pub area: String,
-    price: f32,
+    #[serde(serialize_with = "serialize_prices")]
+    price: Vec<PetroleumPrice>,
     #[serde(flatten)]
     pub district: Option<District>,
+}
+
+fn serialize_prices<S>(vec: &Vec<PetroleumPrice>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(vec.len()))?;
+    for item in vec {
+        map.serialize_entry(&item.p_type, &item.value)?;
+    }
+    map.end()
 }
 
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
@@ -220,7 +240,12 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     latitude: address_lat,
                     longitude: address_lon,
                     area: area.inner_html().trim().to_string(),
-                    price: price.inner_html().trim().parse::<f32>().unwrap(),
+                    price: vec![
+                        PetroleumPrice {
+                            p_type: petroleum_type,
+                            value: price.inner_html().trim().parse:: < f32>().unwrap(),
+                        }
+                    ],
                     district: None,
                 };
 
