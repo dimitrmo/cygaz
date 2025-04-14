@@ -1,6 +1,6 @@
 use actix_web::body::BoxBody;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use cygaz_lib::{District, DISTRICTS, fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
+use cygaz_lib::{fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
 use reqwest::header::HeaderMap;
 use reqwest::{Error, Response};
@@ -12,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
+use cygaz_lib::districts::{District, DISTRICTS};
 
 static READY: OnceLock<bool> = OnceLock::new();
 
@@ -269,6 +270,26 @@ async fn get_districts(
     actix_web::web::Json(districts)
 }
 
+#[get("/districts/{id}")]
+async fn get_district_by_id(
+    path: web::Path<String>,
+    data: web::Data<Arc<RwLock<AppState>>>
+) -> impl Responder {
+    let id = path.into_inner();
+    let state = data.read().unwrap();
+    let mut found_district = District::unknown();
+
+    for district in DISTRICTS.iter() {
+        if district.id.eq(&id) {
+            found_district = district.clone();
+            break;
+        }
+    }
+
+    found_district.areas = Some(find_areas_for_district(&found_district, &state.areas));
+    actix_web::web::Json(found_district)
+}
+
 #[get("/prices/1")]
 async fn get_unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
@@ -456,6 +477,7 @@ async fn main() {
             .service(get_diesel_auto)
             .service(get_kerosene)
             .service(get_districts)
+            .service(get_district_by_id)
             .service(get_version)
             .service(get_ready)
     })

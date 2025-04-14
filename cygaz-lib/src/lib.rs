@@ -1,4 +1,4 @@
-extern crate core;
+pub mod districts;
 
 use std::fmt::Display;
 use std::string::ToString;
@@ -6,8 +6,8 @@ use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use lazy_static::lazy_static;
 use url::Url;
+use crate::districts::District;
 
 #[derive(Debug, Copy, Clone, Serialize)]
 pub enum PetroleumType {
@@ -20,45 +20,12 @@ pub enum PetroleumType {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-pub struct AreaInDistrict {
+pub struct Area {
     disabled: bool,
     group: Option<String>,
     selected: bool,
     pub text: String,
     pub value: String
-}
-
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
-#[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
-pub struct District {
-    #[serde(rename = "district_en")]
-    pub name_en: String,
-    #[serde(rename = "district_el")]
-    pub name_el: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub areas: Option<Vec<String>>
-}
-
-impl District {
-    pub fn new(name_en: String, name_el: String) -> Self {
-        Self { name_en, name_el, areas: None }
-    }
-
-    pub fn unknown() -> Self {
-        Self { name_en: "Unknown".to_string(), name_el: "Αγνωστο".to_string(), areas: None }
-    }
-}
-
-lazy_static! {
-    pub static ref DISTRICTS: Vec<District> = {
-        let mut all: Vec<District> = vec![];
-        all.push(District::new("Famagusta".to_string(), "Αμμόχωστος".to_string()));
-        all.push(District::new("Larnaca".to_string(), "Λάρνακα".to_string()));
-        all.push(District::new("Limassol".to_string(), "Λεμεσός".to_string()));
-        all.push(District::new("Nicosia".to_string(), "Λευκωσία".to_string()));
-        all.push(District::new("Paphos".to_string(), "Πάφος".to_string()));
-        all
-    };
 }
 
 static GET_STATION_DISTRICT_ENDPOINT: &'static str =
@@ -132,7 +99,7 @@ fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, Str
     ))
 }
 
-pub fn fetch_areas_for_district(district: String) -> Result<Vec<AreaInDistrict>, CyGazError> {
+pub fn fetch_areas_for_district(district: String) -> Result<Vec<Area>, CyGazError> {
     let client = reqwest::blocking::Client::builder()
         .cookie_store(true)
         .build()
@@ -151,7 +118,7 @@ pub fn fetch_areas_for_district(district: String) -> Result<Vec<AreaInDistrict>,
         return Err(CyGazError(response.unwrap_err().to_string()));
     }
 
-    let data = response.unwrap().json::<Vec<AreaInDistrict>>();
+    let data = response.unwrap().json::<Vec<Area>>();
     if data.is_err() {
         return Err(CyGazError(data.unwrap_err().to_string()));
     }
