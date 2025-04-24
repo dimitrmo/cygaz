@@ -1,6 +1,7 @@
 pub mod districts;
 
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
@@ -73,6 +74,17 @@ pub struct PetroleumStation {
     pub district: Option<District>,
 }
 
+impl Hash for PetroleumStation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.brand.hash(state);
+        self.company.hash(state);
+        self.address.hash(state);
+        self.latitude.hash(state);
+        self.longitude.hash(state);
+        self.area.hash(state);
+    }
+}
+
 fn serialize_prices<S>(vec: &Vec<PetroleumPrice>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -81,6 +93,7 @@ where
     for item in vec {
         map.serialize_entry(&item.p_type, &item.value)?;
     }
+
     map.end()
 }
 
