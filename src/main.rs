@@ -2,16 +2,13 @@ use actix_web::body::BoxBody;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use cygaz_lib::{fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
-use reqwest::header::HeaderMap;
-use reqwest::{Error, Response};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
-use tokio_cron_scheduler::{Job, JobScheduler};
-use uuid::Uuid;
+use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 use cygaz_lib::districts::{District, DISTRICTS};
 
 static READY: OnceLock<bool> = OnceLock::new();
@@ -32,18 +29,12 @@ fn default_host() -> String {
     "0.0.0.0".to_string()
 }
 
-fn default_uuid() -> String {
-    Uuid::new_v4().to_string()
-}
-
 #[derive(Deserialize, Clone, Debug)]
 struct Config {
     #[serde(default = "default_port")]
     port: u16,
     #[serde(default = "default_host")]
     host: String,
-    #[serde(default = "default_uuid")]
-    secret: String,
 }
 
 struct AppState {
@@ -335,72 +326,25 @@ async fn get_ready() -> impl Responder {
     HttpResponse::BadRequest().json(serde_json::json!({ "ready": false }))
 }
 
-async fn refresh_petroleum_type(
-    config: Arc<Config>,
-    petroleum_type: PetroleumType,
-) -> Result<Response, Error> {
-    let endpoint = format!(
-        "http://{}:{}/prices/{}/refresh",
-        config.host, config.port, petroleum_type as i32
-    );
-
-    info!("calling {}", endpoint);
-
-    let mut headers = HeaderMap::new();
-    headers.insert("X-TOKEN", config.secret.parse().unwrap());
-
-    let client = reqwest::Client::new();
-    client.patch(endpoint).headers(headers).send().await
-}
-
-async fn setup_cron(config: Arc<Config>, prices: web::Data<Arc<RwLock<AppState>>>) -> JobScheduler {
+async fn setup_cron(prices: web::Data<Arc<RwLock<AppState>>>) -> JobScheduler {
     debug!("setting up cron");
 
-    let sched = JobScheduler::new().await.unwrap();
+    let scheduler = JobScheduler::new().await.unwrap();
 
-    if let Err(e) = sched.add(
-        Job::new_async("0 1,16,31,46 * * * *", move |_uuid, _l| {
-            let config = config.clone();
+    if let Err(e) = scheduler.add(
+        Job::new("0 1,16,31,46 * * * *", move |_uuid, _l| {
+            info!("cron trigger to refresh prices");
             let prices = prices.clone();
+            refresh_prices(prices);
 
-            Box::pin(async move {
-                if let Err(e) =
-                    refresh_petroleum_type(config.clone(), PetroleumType::Unlead95).await
-                {
-                    warn!("error refreshing unlead95 {}", e);
-                }
-                if let Err(e) =
-                    refresh_petroleum_type(config.clone(), PetroleumType::Unlead98).await
-                {
-                    warn!("error refreshing unlead98 {}", e);
-                }
-                if let Err(e) =
-                    refresh_petroleum_type(config.clone(), PetroleumType::DieselHeat).await
-                {
-                    warn!("error refreshing diesel heat {}", e);
-                }
-                if let Err(e) =
-                    refresh_petroleum_type(config.clone(), PetroleumType::DieselAuto).await
-                {
-                    warn!("error refreshing diesel auto {}", e);
-                }
-                if let Err(e) =
-                    refresh_petroleum_type(config.clone(), PetroleumType::Kerosene).await
-                {
-                    warn!("error refreshing kerosene {}", e);
-                }
-
-                refresh_prices(prices);
-
-                info!("scheduler finished successfully");
-            })
+            info!("job finished successfully");
         })
         .unwrap(),
     ).await {
         warn!("error scheduling {:?}", e);
     }
 
-    sched
+    scheduler
 }
 
 #[tokio::main]
@@ -460,10 +404,13 @@ async fn main() {
         READY.set(true)
     });
 
-    let scheduler = setup_cron(config.clone(), data.clone());
+    let scheduler = setup_cron(data.clone());
 
-    if let Err(e) = scheduler.await.start().await {
-        warn!("failed to start scheduler {:?}", e);
+    scheduler.shutdown_on_ctrl_c();
+
+    match scheduler.await.start().await {
+        Ok(_) => info!("scheduler started"),
+        Err(e) => warn!("failed to start scheduler {:?}", e)
     }
 
     info!("starting http server @ {}", address.clone());
