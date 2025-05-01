@@ -30,13 +30,13 @@ struct Config {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct PriceListV2 {
+struct PriceList {
     updated_at: u128,
     updated_at_str: String,
     prices: HashMap<String, HashSet<PetroleumStation>>,
 }
 
-impl PriceListV2 {
+impl PriceList {
     pub fn now() -> (u128, String) {
         let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
         let epoch_updated_at = epoch.unwrap().as_millis();
@@ -45,9 +45,9 @@ impl PriceListV2 {
     }
 }
 
-impl Default for PriceListV2 {
+impl Default for PriceList {
     fn default() -> Self {
-        let t = PriceListV2::now();
+        let t = PriceList::now();
         Self {
             updated_at: t.0,
             updated_at_str: t.1,
@@ -66,7 +66,7 @@ struct AppState {
     */
     //
     areas: Arc<RwLock<HashMap<String, District>>>,
-    prices: Arc<RwLock<PriceListV2>>
+    prices: Arc<RwLock<PriceList>>
 }
 
 fn millis_to_datetime(millis: u128) -> String {
@@ -231,7 +231,7 @@ fn refresh_prices(
         }
     }
 
-    let time = PriceListV2::now();
+    let time = PriceList::now();
     price_list.updated_at = time.0;
     price_list.updated_at_str = time.1;
 }
@@ -252,7 +252,7 @@ async fn get_prices_by_district(
 
     if !District::is_valid(id.clone()) {
         warn!("district {:?} is invalid", id.clone());
-        let time = PriceListV2::now();
+        let time = PriceList::now();
         return actix_web::web::Json(json!({
             "updated_at": time.0,
             "updated_at_str": time.1,
