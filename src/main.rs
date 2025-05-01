@@ -5,7 +5,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
@@ -37,13 +37,39 @@ struct Config {
     host: String,
 }
 
+#[derive(Clone, Serialize)]
+struct PriceListV2 {
+    updated_at: u128,
+    updated_at_str: String,
+    prices: HashMap<District, HashSet<PetroleumStation>>
+}
+
+impl Default for PriceListV2 {
+    fn default() -> Self {
+        // fetch timestamp
+        let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
+        let epoch_updated_at = epoch.unwrap().as_millis();
+        let datetime = millis_to_datetime(epoch_updated_at);
+
+        Self {
+            updated_at: epoch_updated_at,
+            updated_at_str: datetime.clone(),
+            prices: HashMap::new(),
+        }
+    }
+}
+
 struct AppState {
+    /*
     unlead95: PriceList,
     unlead98: PriceList,
     diesel_heat: PriceList,
     diesel_auto: PriceList,
     kerosene: PriceList,
-    areas: HashMap<String, District>
+    */
+    //
+    areas: Arc<RwLock<HashMap<String, District>>>,
+    prices: Arc<RwLock<PriceListV2>>
 }
 
 impl Responder for PriceList {
@@ -63,7 +89,7 @@ fn millis_to_datetime(millis: u128) -> String {
 }
 
 async fn refresh_districts(
-    state: web::Data<Arc<RwLock<AppState>>>
+    state: web::Data<AppState>
 ) {
     debug!("refreshing districts");
 
@@ -83,9 +109,9 @@ async fn refresh_districts(
 
     let result = t.join().unwrap_or_default();
 
-    let mut lock = state.write().unwrap();
+    let mut lock = state.areas.write().unwrap();
 
-    lock.areas = result
+    *lock = result
 }
 
 fn find_district(
@@ -114,10 +140,13 @@ fn find_areas_for_district(
 }
 
 fn refresh_prices(
-    state: web::Data<Arc<RwLock<AppState>>>
+    state: web::Data<AppState>
 ) {
     debug!("refreshing prices");
 
+
+
+    /*
     let unlead95_state = state.clone();
     let unlead95_handler = thread::spawn(move || {
         debug!("warming up unlead 95");
@@ -244,18 +273,18 @@ fn refresh_prices(
         updated_at: epoch_updated_at,
         updated_at_str: datetime.clone(),
         stations: kerosene_stations,
-    };
+    };*/
 }
 
 #[get("/districts")]
 async fn get_districts(
-    data: web::Data<Arc<RwLock<AppState>>>
+    data: web::Data<AppState>,
 ) -> impl Responder {
-    let state = data.read().unwrap();
+    let areas = data.areas.read().unwrap();
     let mut districts = DISTRICTS.clone();
 
     for district in &mut districts {
-        district.areas = Some(find_areas_for_district(&district, &state.areas));
+        district.areas = Some(find_areas_for_district(&district, &areas));
     }
 
     actix_web::web::Json(districts)
@@ -264,10 +293,10 @@ async fn get_districts(
 #[get("/districts/{id}")]
 async fn get_district_by_id(
     path: web::Path<String>,
-    data: web::Data<Arc<RwLock<AppState>>>
+    data: web::Data<AppState>,
 ) -> impl Responder {
     let id = path.into_inner();
-    let state = data.read().unwrap();
+    let areas = data.areas.read().unwrap();
     let mut found_district = District::unknown();
 
     for district in DISTRICTS.iter() {
@@ -277,10 +306,11 @@ async fn get_district_by_id(
         }
     }
 
-    found_district.areas = Some(find_areas_for_district(&found_district, &state.areas));
+    found_district.areas = Some(find_areas_for_district(&found_district, &areas));
     actix_web::web::Json(found_district)
 }
 
+/*
 #[get("/prices/1")]
 async fn get_unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
@@ -309,7 +339,7 @@ async fn get_diesel_auto(data: web::Data<Arc<RwLock<AppState>>>) -> impl Respond
 async fn get_kerosene(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
     let state = data.read().unwrap();
     state.kerosene.clone()
-}
+}*/
 
 #[get("/version")]
 async fn get_version() -> impl Responder {
@@ -326,11 +356,13 @@ async fn get_ready() -> impl Responder {
     HttpResponse::BadRequest().json(serde_json::json!({ "ready": false }))
 }
 
-async fn setup_cron(prices: web::Data<Arc<RwLock<AppState>>>) -> JobScheduler {
+async fn setup_cron(state: web::Data<AppState>) -> JobScheduler {
     debug!("setting up cron");
+
 
     let scheduler = JobScheduler::new().await.unwrap();
 
+    /*
     if let Err(e) = scheduler.add(
         Job::new("0 1,16,31,46 * * * *", move |_uuid, _l| {
             info!("cron trigger to refresh prices");
@@ -343,6 +375,7 @@ async fn setup_cron(prices: web::Data<Arc<RwLock<AppState>>>) -> JobScheduler {
     ).await {
         warn!("error scheduling {:?}", e);
     }
+    */
 
     scheduler
 }
@@ -361,7 +394,8 @@ async fn main() {
 
     info!("warming up initial cache");
 
-    let data = web::Data::new(Arc::new(RwLock::new(AppState {
+    let data = web::Data::new(AppState {
+        /*
         unlead95: PriceList {
             petroleum_type: PetroleumType::Unlead95,
             updated_at,
@@ -392,8 +426,10 @@ async fn main() {
             updated_at_str: datetime.clone(),
             stations: vec![],
         },
-        areas: HashMap::new()
-    })));
+        */
+        areas: Default::default(),
+        prices: Default::default(),
+    });
 
     let prices = data.clone();
 
@@ -406,8 +442,6 @@ async fn main() {
 
     let scheduler = setup_cron(data.clone());
 
-    scheduler.shutdown_on_ctrl_c();
-
     match scheduler.await.start().await {
         Ok(_) => info!("scheduler started"),
         Err(e) => warn!("failed to start scheduler {:?}", e)
@@ -418,11 +452,11 @@ async fn main() {
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
-            .service(get_unlead95)
-            .service(get_unlead98)
-            .service(get_diesel_heat)
-            .service(get_diesel_auto)
-            .service(get_kerosene)
+            //.service(get_unlead95)
+            //.service(get_unlead98)
+            //.service(get_diesel_heat)
+            //.service(get_diesel_auto)
+            //.service(get_kerosene)
             .service(get_districts)
             .service(get_district_by_id)
             .service(get_version)
