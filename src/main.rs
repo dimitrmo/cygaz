@@ -1,15 +1,14 @@
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use cygaz_lib::{fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use std::collections::{HashMap, HashSet};
-use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{DateTime};
 use serde_json::json;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use cygaz_lib::district::{District, DISTRICTS};
+use cygaz_lib::price::PriceList;
 
 static READY: OnceLock<bool> = OnceLock::new();
 
@@ -29,32 +28,7 @@ struct Config {
     host: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct PriceList {
-    updated_at: u128,
-    updated_at_str: String,
-    prices: HashMap<String, HashSet<PetroleumStation>>,
-}
 
-impl PriceList {
-    pub fn now() -> (u128, String) {
-        let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-        let epoch_updated_at = epoch.unwrap().as_millis();
-        let datetime = millis_to_datetime(epoch_updated_at);
-        (epoch_updated_at, datetime)
-    }
-}
-
-impl Default for PriceList {
-    fn default() -> Self {
-        let t = PriceList::now();
-        Self {
-            updated_at: t.0,
-            updated_at_str: t.1,
-            prices: Default::default()
-        }
-    }
-}
 
 struct AppState {
     /*
@@ -67,12 +41,6 @@ struct AppState {
     //
     areas: Arc<RwLock<HashMap<String, District>>>,
     prices: Arc<RwLock<PriceList>>
-}
-
-fn millis_to_datetime(millis: u128) -> String {
-    let secs = (millis / 1000) as i64;
-    let datetime_utc = DateTime::from_timestamp(secs, 0).unwrap_or_default();
-    datetime_utc.format("%Y-%m-%d %H:%M:%S%.3f UTC").to_string()
 }
 
 fn refresh_districts(

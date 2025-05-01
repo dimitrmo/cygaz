@@ -1,5 +1,5 @@
 pub mod district;
-mod price;
+pub mod price;
 
 use std::fmt::{Display};
 use std::hash::{Hash, Hasher};

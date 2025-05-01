@@ -12,13 +12,14 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 reqwest = { workspace = true }
-serde_json = { workspace = true, features = ["preserve_order"] }
+serde_json = { workspace = true }
 serde = { workspace = true }
 url = { version = "2.5", features = ["serde"] }
 scraper = "0.23"
 lazy_static = "1.5"
 ordered-float = "5.0"
 convert_case = "0.8"
+chrono = { version = "0.4" }
 
 [profile.release]
 strip = "debuginfo"
