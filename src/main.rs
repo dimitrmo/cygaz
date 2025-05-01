@@ -222,10 +222,16 @@ async fn get_prices_by_district_id(
     if !District::is_valid(id.clone()) {
         warn!("district {:?} is invalid", id.clone());
         let time = PriceList::now();
+
+        let mut prices = json!({});
+        if let Value::Object(ref mut map) = prices {
+            map.insert("invalid".to_string(), json!(default_price));
+        }
+
         return (StatusCode::BAD_REQUEST, Json(json!({
             "updated_at": time.0,
             "updated_at_str": time.1,
-            "prices": default_price,
+            "prices": prices
         })));
     }
 
@@ -233,12 +239,17 @@ async fn get_prices_by_district_id(
     let guard = lock.read().unwrap();
     let prices = guard.prices.get(&id).unwrap_or(&default_price).clone();
 
+    let mut prices_json = json!({});
+    if let Value::Object(ref mut map) = prices_json {
+        map.insert(id.to_string(), json!(prices));
+    }
+
     (
         StatusCode::OK,
         Json(json!({
             "updated_at": guard.updated_at,
             "updated_at_str": guard.updated_at_str,
-            "prices": prices,
+            "prices": prices_json,
         }))
     )
 }
