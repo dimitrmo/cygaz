@@ -1,17 +1,18 @@
-pub mod districts;
+pub mod district;
+mod price;
 
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display};
 use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
-use serde::{Deserialize, Serialize, Serializer};
-use serde::ser::SerializeMap;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use url::Url;
-use crate::districts::District;
+use crate::district::District;
+use crate::price::PetroleumPrice;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum PetroleumType {
     Unlead95 = 1,
     Unlead98 = 2,
@@ -21,7 +22,7 @@ pub enum PetroleumType {
 }
 
 impl Display for PetroleumType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PetroleumType::Unlead95 => write!(f, "Unlead 95"),
             PetroleumType::Unlead98 => write!(f, "Unlead 98"),
@@ -30,13 +31,6 @@ impl Display for PetroleumType {
             PetroleumType::Kerosene => write!(f, "Unlead Kerosene"),
         }
     }
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub struct PetroleumPrice {
-    p_type: PetroleumType,
-    value: f32,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -71,7 +65,7 @@ impl Display for CyGazError {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct PetroleumStation {
     brand: String,
     offline: bool,
@@ -80,33 +74,26 @@ pub struct PetroleumStation {
     latitude: String,
     longitude: String,
     pub area: String,
-    #[serde(serialize_with = "serialize_prices")]
-    price: Vec<PetroleumPrice>,
-    #[serde(flatten)]
+    pub prices: Vec<PetroleumPrice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub district: Option<District>,
 }
 
 impl Hash for PetroleumStation {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.brand.hash(state);
-        self.company.hash(state);
-        self.address.hash(state);
         self.latitude.hash(state);
         self.longitude.hash(state);
-        self.area.hash(state);
     }
 }
 
-fn serialize_prices<S>(vec: &Vec<PetroleumPrice>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let mut map = serializer.serialize_map(Some(vec.len()))?;
-    for item in vec {
-        map.serialize_entry(&item.p_type, &item.value)?;
+impl PartialEq for PetroleumStation {
+    fn eq(&self, other: &Self) -> bool {
+        self.latitude == other.latitude && self.longitude == other.longitude
     }
+}
 
-    map.end()
+impl Eq for PetroleumStation {
+    //
 }
 
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
@@ -257,6 +244,11 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                 let price = tds.next().unwrap();
                 // println!("price {}", price.inner_html().trim().parse::<f32>().unwrap());
 
+                let p_price = PetroleumPrice::new(
+                    petroleum_type,
+                    price.inner_html().trim().parse:: < f32>().unwrap()
+                );
+
                 let station = PetroleumStation {
                     brand: brand.inner_html().trim().to_string(),
                     offline: offline.is_some(),
@@ -265,12 +257,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     latitude: address_lat,
                     longitude: address_lon,
                     area: area.inner_html().trim().to_string(),
-                    price: vec![
-                        PetroleumPrice {
-                            p_type: petroleum_type,
-                            value: price.inner_html().trim().parse:: < f32>().unwrap(),
-                        }
-                    ],
+                    prices: vec![p_price],
                     district: None,
                 };
 

@@ -1,5 +1,4 @@
-use actix_web::body::BoxBody;
-use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use cygaz_lib::{fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
@@ -8,18 +7,10 @@ use std::thread;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
-use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
-use cygaz_lib::districts::{District, DISTRICTS};
+use tokio_cron_scheduler::{Job, JobScheduler};
+use cygaz_lib::district::{District, DISTRICTS};
 
 static READY: OnceLock<bool> = OnceLock::new();
-
-#[derive(Clone, Serialize)]
-struct PriceList {
-    updated_at: u128,
-    updated_at_str: String,
-    petroleum_type: PetroleumType,
-    stations: Vec<PetroleumStation>,
-}
 
 fn default_port() -> u16 {
     8080
@@ -37,24 +28,29 @@ struct Config {
     host: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct PriceListV2 {
     updated_at: u128,
     updated_at_str: String,
-    prices: HashMap<District, HashSet<PetroleumStation>>
+    prices: HashMap<String, HashSet<PetroleumStation>>,
+}
+
+impl PriceListV2 {
+    pub fn now() -> (u128, String) {
+        let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
+        let epoch_updated_at = epoch.unwrap().as_millis();
+        let datetime = millis_to_datetime(epoch_updated_at);
+        (epoch_updated_at, datetime)
+    }
 }
 
 impl Default for PriceListV2 {
     fn default() -> Self {
-        // fetch timestamp
-        let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-        let epoch_updated_at = epoch.unwrap().as_millis();
-        let datetime = millis_to_datetime(epoch_updated_at);
-
+        let t = PriceListV2::now();
         Self {
-            updated_at: epoch_updated_at,
-            updated_at_str: datetime.clone(),
-            prices: HashMap::new(),
+            updated_at: t.0,
+            updated_at_str: t.1,
+            prices: Default::default()
         }
     }
 }
@@ -70,16 +66,6 @@ struct AppState {
     //
     areas: Arc<RwLock<HashMap<String, District>>>,
     prices: Arc<RwLock<PriceListV2>>
-}
-
-impl Responder for PriceList {
-    type Body = BoxBody;
-    fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
-        let body = serde_json::to_string(&self).unwrap();
-        HttpResponse::Ok()
-            .content_type("application/json")
-            .body(body)
-    }
 }
 
 fn millis_to_datetime(millis: u128) -> String {
@@ -182,6 +168,7 @@ fn refresh_prices(
         PetroleumType::Unlead98
     );
 
+    /*
     debug!("downloaded {} stations for {}", unlead98_stations.len(), PetroleumType::Unlead98);
 
     let diesel_heat_stations = refresh_price_for_petroleum_type(
@@ -204,6 +191,50 @@ fn refresh_prices(
     );
 
     debug!("downloaded {} stations for {}", kerosene_stations.len(), PetroleumType::Kerosene);
+    */
+
+    let mut price_list = state.prices.write().unwrap();
+
+    for station in unlead95_stations.iter()
+            .chain(unlead98_stations.iter())
+            // .chain(diesel_heat_stations.iter())
+            // .chain(diesel_auto_stations.iter())
+            //.chain(kerosene_stations.iter()) {
+    {
+        if let Some(district) = &station.district {
+            if !price_list.prices.contains_key(&district.id) {
+                price_list.prices.insert(district.id.clone(), Default::default());
+            }
+
+            if let Some(stations) = price_list.prices.get_mut(&district.id) {
+                match stations.contains(station) {
+                    true => {
+                        let mut existing = stations.take(station).unwrap();
+                        let mut prices = existing.prices;
+
+                        for price in &station.prices {
+                            if !prices.contains(&price) {
+                                prices.push(*price);
+                            }
+                        }
+
+                        existing.prices = prices;
+                        existing.district = None;
+                        stations.insert(existing);
+                    }
+                    false => {
+                        stations.insert(station.clone());
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[get("/prices")]
+async fn get_prices(data: web::Data<AppState>) -> impl Responder {
+    let prices = data.prices.read().unwrap();
+    actix_web::web::Json(prices.clone())
 }
 
 #[get("/districts")]
@@ -289,14 +320,12 @@ async fn get_ready() -> impl Responder {
 async fn setup_cron(state: web::Data<AppState>) -> JobScheduler {
     debug!("setting up cron");
 
-
     let scheduler = JobScheduler::new().await.unwrap();
 
-    /*
     if let Err(e) = scheduler.add(
         Job::new("0 1,16,31,46 * * * *", move |_uuid, _l| {
             info!("cron trigger to refresh prices");
-            let prices = prices.clone();
+            let prices = state.clone();
             refresh_prices(prices);
 
             info!("job finished successfully");
@@ -305,7 +334,6 @@ async fn setup_cron(state: web::Data<AppState>) -> JobScheduler {
     ).await {
         warn!("error scheduling {:?}", e);
     }
-    */
 
     scheduler
 }
@@ -318,45 +346,9 @@ async fn main() {
     let config = Arc::new(raw);
     let address = format!("{}:{}", config.host, config.port);
 
-    let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-    let updated_at = epoch.unwrap().as_millis();
-    let datetime = millis_to_datetime(updated_at);
-
     info!("warming up initial cache");
 
     let state = web::Data::new(AppState {
-        /*
-        unlead95: PriceList {
-            petroleum_type: PetroleumType::Unlead95,
-            updated_at,
-            updated_at_str: datetime.clone(),
-            stations: vec![],
-        },
-        unlead98: PriceList {
-            petroleum_type: PetroleumType::Unlead98,
-            updated_at,
-            updated_at_str: datetime.clone(),
-            stations: vec![],
-        },
-        diesel_heat: PriceList {
-            petroleum_type: PetroleumType::DieselHeat,
-            updated_at,
-            updated_at_str: datetime.clone(),
-            stations: vec![],
-        },
-        diesel_auto: PriceList {
-            petroleum_type: PetroleumType::DieselAuto,
-            updated_at,
-            updated_at_str: datetime.clone(),
-            stations: vec![],
-        },
-        kerosene: PriceList {
-            petroleum_type: PetroleumType::Kerosene,
-            updated_at,
-            updated_at_str: datetime.clone(),
-            stations: vec![],
-        },
-        */
         areas: Default::default(),
         prices: Default::default(),
     });
@@ -382,6 +374,7 @@ async fn main() {
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
+            .service(get_prices)
             //.service(get_unlead95)
             //.service(get_unlead98)
             //.service(get_diesel_heat)

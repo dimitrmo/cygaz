@@ -1,7 +1,8 @@
+use std::hash::{Hash, Hasher};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
 pub struct District {
     pub id: String,
@@ -11,6 +12,16 @@ pub struct District {
     pub name_el: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub areas: Option<Vec<String>>
+}
+
+impl PartialEq for District {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for District {
+    //
 }
 
 impl District {
@@ -30,6 +41,12 @@ impl District {
             name_el: "Αγνωστο".to_string(),
             areas: None
         }
+    }
+}
+
+impl Hash for District {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
