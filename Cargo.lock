@@ -605,7 +605,6 @@ dependencies = [
  "chrono",
  "convert_case",
  "lazy_static",
- "ordered-float",
  "reqwest",
  "scraper",
  "serde",
@@ -1607,15 +1606,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "ordered-float"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]

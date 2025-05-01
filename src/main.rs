@@ -28,17 +28,7 @@ struct Config {
     host: String,
 }
 
-
-
 struct AppState {
-    /*
-    unlead95: PriceList,
-    unlead98: PriceList,
-    diesel_heat: PriceList,
-    diesel_auto: PriceList,
-    kerosene: PriceList,
-    */
-    //
     areas: Arc<RwLock<HashMap<String, District>>>,
     prices: Arc<RwLock<PriceList>>
 }
@@ -137,7 +127,6 @@ fn refresh_prices(
         PetroleumType::Unlead98
     );
 
-    /*
     debug!("downloaded {} stations for {}", unlead98_stations.len(), PetroleumType::Unlead98);
 
     let diesel_heat_stations = refresh_price_for_petroleum_type(
@@ -160,16 +149,14 @@ fn refresh_prices(
     );
 
     debug!("downloaded {} stations for {}", kerosene_stations.len(), PetroleumType::Kerosene);
-    */
 
     let mut price_list = state.prices.write().unwrap();
 
     for station in unlead95_stations.iter()
             .chain(unlead98_stations.iter())
-            // .chain(diesel_heat_stations.iter())
-            // .chain(diesel_auto_stations.iter())
-            //.chain(kerosene_stations.iter()) {
-    {
+            .chain(diesel_heat_stations.iter())
+            .chain(diesel_auto_stations.iter())
+            .chain(kerosene_stations.iter()) {
         if let Some(district) = &station.district {
             if !price_list.prices.contains_key(&district.id) {
                 price_list.prices.insert(district.id.clone(), Default::default());
@@ -183,7 +170,7 @@ fn refresh_prices(
 
                         for price in &station.prices {
                             if !prices.contains(&price) {
-                                prices.push(*price);
+                                prices.push(price.clone());
                             }
                         }
 

@@ -2,15 +2,14 @@ use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::DateTime;
 use convert_case::{Case, Casing};
-use ordered_float::NotNan;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use crate::{PetroleumStation, PetroleumType};
 
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct PetroleumPrice {
     pub p_type: PetroleumType,
-    pub value: NotNan<f32>,
+    pub value: String,
 }
 
 impl Serialize for PetroleumPrice {
@@ -20,18 +19,20 @@ impl Serialize for PetroleumPrice {
     {
         let mut s = serializer.serialize_struct("PetroleumPrice", 3)?;
         let id = format!("{}", self.p_type);
+        let kind: usize = self.p_type as usize;
+        s.serialize_field("kind", &kind)?;
         s.serialize_field("id", &id.to_case(Case::Snake))?;
         s.serialize_field("label", &self.p_type.to_string())?;
-        s.serialize_field("value", &self.value.into_inner())?;
+        s.serialize_field("value", &self.value)?;
         s.end()
     }
 }
 
 impl PetroleumPrice {
-    pub fn new(p_type: PetroleumType, price: f32) -> Self {
+    pub fn new(p_type: PetroleumType, price: String) -> Self {
         Self {
             p_type,
-            value: NotNan::new(price).unwrap()
+            value: price,
         }
     }
 }

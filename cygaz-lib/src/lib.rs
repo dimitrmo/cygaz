@@ -246,7 +246,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
 
                 let p_price = PetroleumPrice::new(
                     petroleum_type,
-                    price.inner_html().trim().parse:: < f32>().unwrap()
+                    price.inner_html().trim().to_string()
                 );
 
                 let station = PetroleumStation {
