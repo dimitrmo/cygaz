@@ -274,8 +274,11 @@ async fn get_district_by_id(
     (StatusCode::OK, Json(found_district))
 }
 
-async fn get_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+async fn get_version() -> Json<Value> {
+    let version = env!("CARGO_PKG_VERSION");
+    Json(json!({
+        "version": version
+    }))
 }
 
 async fn get_ready() -> (StatusCode, Json<Value>) {
@@ -326,7 +329,7 @@ async fn main() {
     tokio::spawn(async move {
         refresh_districts(data.clone());
         refresh_prices(data);
-        debug!("warm up completed");
+        info!("data cache ready");
         READY.set(true)
     });
 
@@ -347,27 +350,6 @@ async fn main() {
         .route("/districts", get(get_districts))
         .route("/districts/{id}", get(get_district_by_id))
         .with_state(shared_state);
-
-    /*
-    HttpServer::new(move || {
-        App::new()
-            .app_data(shared_state.clone())
-            .service(get_prices)
-            .service(get_prices_by_district)
-            //.service(get_unlead95)
-            //.service(get_unlead98)
-            //.service(get_diesel_heat)
-            //.service(get_diesel_auto)
-            //.service(get_kerosene)
-            .service(get_districts)
-            .service(get_district_by_id)
-            .service(get_version)
-            .service(get_ready)
-    })
-        .bind(address)
-        .unwrap()
-        .run()
-        .await.expect("server failed to start")*/
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
