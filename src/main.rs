@@ -275,9 +275,8 @@ async fn get_district_by_id(
 }
 
 async fn get_version() -> Json<Value> {
-    let version = env!("CARGO_PKG_VERSION");
     Json(json!({
-        "version": version
+        "version": env!("CARGO_PKG_VERSION")
     }))
 }
 
