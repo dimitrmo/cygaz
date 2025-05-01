@@ -1,6 +1,6 @@
 pub mod districts;
 
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use reqwest::header::USER_AGENT;
@@ -18,6 +18,18 @@ pub enum PetroleumType {
     DieselHeat = 3,
     DieselAuto = 4,
     Kerosene = 5,
+}
+
+impl Display for PetroleumType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PetroleumType::Unlead95 => write!(f, "Unlead 95"),
+            PetroleumType::Unlead98 => write!(f, "Unlead 98"),
+            PetroleumType::DieselHeat => write!(f, "Diesel Heat"),
+            PetroleumType::DieselAuto => write!(f, "Diesel Auto"),
+            PetroleumType::Kerosene => write!(f, "Unlead Kerosene"),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

@@ -88,7 +88,7 @@ fn millis_to_datetime(millis: u128) -> String {
     datetime_utc.format("%Y-%m-%d %H:%M:%S%.3f UTC").to_string()
 }
 
-async fn refresh_districts(
+fn refresh_districts(
     state: web::Data<AppState>
 ) {
     debug!("refreshing districts");
@@ -139,141 +139,71 @@ fn find_areas_for_district(
     }).collect();
 }
 
+fn refresh_price_for_petroleum_type(
+    state: web::Data<AppState>,
+    p_type: PetroleumType
+) -> Vec<PetroleumStation> {
+    debug!("warming up {}", p_type);
+
+    let p_state = state.clone();
+    let p_handler = thread::spawn(move || {
+        let mut prices = fetch_prices(p_type).unwrap_or_else(|err| {
+            debug!("Error fetching prices for {}: {}", err, p_type);
+            vec![]
+        });
+
+        let areas = p_state.areas.read().unwrap();
+        for price in prices.iter_mut() {
+            price.district = Some(find_district(&price.area, &areas));
+        }
+
+        prices
+    });
+
+    let result = p_handler.join().unwrap_or_default();
+
+    result
+}
+
 fn refresh_prices(
     state: web::Data<AppState>
 ) {
     debug!("refreshing prices");
 
+    let unlead95_stations = refresh_price_for_petroleum_type(
+        state.clone(),
+        PetroleumType::Unlead95
+    );
 
+    debug!("downloaded {} stations for {}", unlead95_stations.len(), PetroleumType::Unlead95);
 
-    /*
-    let unlead95_state = state.clone();
-    let unlead95_handler = thread::spawn(move || {
-        debug!("warming up unlead 95");
-        let mut prices = fetch_prices(PetroleumType::Unlead95).unwrap_or_else(|err| {
-            debug!("Error fetching prices for unlead 95: {}", err);
-            vec![]
-        });
+    let unlead98_stations = refresh_price_for_petroleum_type(
+        state.clone(),
+        PetroleumType::Unlead98
+    );
 
-        let value = unlead95_state.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &value.areas));
-        }
+    debug!("downloaded {} stations for {}", unlead98_stations.len(), PetroleumType::Unlead98);
 
-        prices
-    });
+    let diesel_heat_stations = refresh_price_for_petroleum_type(
+        state.clone(),
+        PetroleumType::DieselHeat
+    );
 
-    let unlead98_state = state.clone();
-    let unlead98_handler = thread::spawn(move || {
-        debug!("warming up unlead 98");
-        let mut prices = fetch_prices(PetroleumType::Unlead98).unwrap_or_else(|err| {
-            debug!("Error fetching prices for unlead 98: {}", err);
-            vec![]
-        });
+    debug!("downloaded {} stations for {}", diesel_heat_stations.len(), PetroleumType::DieselHeat);
 
-        let value = unlead98_state.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &value.areas));
-        }
+    let diesel_auto_stations = refresh_price_for_petroleum_type(
+        state.clone(),
+        PetroleumType::DieselAuto
+    );
 
-        prices
-    });
+    debug!("downloaded {} stations for {}", diesel_auto_stations.len(), PetroleumType::DieselAuto);
 
-    let diesel_heat_state = state.clone();
-    let diesel_heat_handler = thread::spawn(move || {
-        debug!("warming up diesel heat");
-        let mut prices = fetch_prices(PetroleumType::DieselHeat).unwrap_or_else(|err| {
-            debug!("Error fetching prices for diesel heat: {}", err);
-            vec![]
-        });
+    let kerosene_stations = refresh_price_for_petroleum_type(
+        state.clone(),
+        PetroleumType::Kerosene
+    );
 
-        let value = diesel_heat_state.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &value.areas));
-        }
-
-        prices
-    });
-
-    let diesel_auto_state = state.clone();
-    let diesel_auto_handler = thread::spawn(move || {
-        debug!("warming up diesel auto");
-        let mut prices = fetch_prices(PetroleumType::DieselAuto).unwrap_or_else(|err| {
-            debug!("Error fetching prices for diesel auto: {}", err);
-            vec![]
-        });
-
-        let value = diesel_auto_state.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &value.areas));
-        }
-
-        prices
-    });
-
-    let kerosene_state = state.clone();
-    let kerosene_handler = thread::spawn(move || {
-        debug!("warming up kerosene");
-        let mut prices = fetch_prices(PetroleumType::Kerosene).unwrap_or_else(|err| {
-            debug!("Error fetching prices for kerosene: {}", err);
-            vec![]
-        });
-
-        let value = kerosene_state.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &value.areas));
-        }
-
-        prices
-    });
-
-    let unlead95_stations = unlead95_handler.join().unwrap_or_default();
-    let unlead98_stations = unlead98_handler.join().unwrap_or_default();
-    let diesel_heat_stations = diesel_heat_handler.join().unwrap_or_default();
-    let diesel_auto_stations = diesel_auto_handler.join().unwrap_or_default();
-    let kerosene_stations = kerosene_handler.join().unwrap_or_default();
-
-    // fetch timestamp
-    let epoch = SystemTime::now().duration_since(UNIX_EPOCH);
-    let epoch_updated_at = epoch.unwrap().as_millis();
-    let datetime = millis_to_datetime(epoch_updated_at);
-
-    let mut lock = state.write().unwrap();
-
-    lock.unlead95 = PriceList {
-        petroleum_type: PetroleumType::Unlead95,
-        updated_at: epoch_updated_at,
-        updated_at_str: datetime.clone(),
-        stations: unlead95_stations,
-    };
-
-    lock.unlead98 = PriceList {
-        petroleum_type: PetroleumType::Unlead98,
-        updated_at: epoch_updated_at,
-        updated_at_str: datetime.clone(),
-        stations: unlead98_stations,
-    };
-
-    lock.diesel_heat = PriceList {
-        petroleum_type: PetroleumType::DieselHeat,
-        updated_at: epoch_updated_at,
-        updated_at_str: datetime.clone(),
-        stations: diesel_heat_stations,
-    };
-
-    lock.diesel_auto = PriceList {
-        petroleum_type: PetroleumType::DieselAuto,
-        updated_at: epoch_updated_at,
-        updated_at_str: datetime.clone(),
-        stations: diesel_auto_stations,
-    };
-
-    lock.kerosene = PriceList {
-        petroleum_type: PetroleumType::Kerosene,
-        updated_at: epoch_updated_at,
-        updated_at_str: datetime.clone(),
-        stations: kerosene_stations,
-    };*/
+    debug!("downloaded {} stations for {}", kerosene_stations.len(), PetroleumType::Kerosene);
 }
 
 #[get("/districts")]
@@ -394,7 +324,7 @@ async fn main() {
 
     info!("warming up initial cache");
 
-    let data = web::Data::new(AppState {
+    let state = web::Data::new(AppState {
         /*
         unlead95: PriceList {
             petroleum_type: PetroleumType::Unlead95,
@@ -431,16 +361,16 @@ async fn main() {
         prices: Default::default(),
     });
 
-    let prices = data.clone();
+    let data = state.clone();
 
     tokio::spawn(async move {
-        refresh_districts(prices.clone()).await;
-        refresh_prices(prices);
+        refresh_districts(data.clone());
+        refresh_prices(data);
         debug!("warm up completed");
         READY.set(true)
     });
 
-    let scheduler = setup_cron(data.clone());
+    let scheduler = setup_cron(state.clone());
 
     match scheduler.await.start().await {
         Ok(_) => info!("scheduler started"),
@@ -451,7 +381,7 @@ async fn main() {
 
     HttpServer::new(move || {
         App::new()
-            .app_data(data.clone())
+            .app_data(state.clone())
             //.service(get_unlead95)
             //.service(get_unlead98)
             //.service(get_diesel_heat)
