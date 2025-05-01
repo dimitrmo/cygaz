@@ -1,11 +1,16 @@
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
-use cygaz_lib::{fetch_areas_for_district, fetch_prices, PetroleumStation, PetroleumType};
+use cygaz_lib::{fetch_areas_for_district, fetch_prices, station::PetroleumStation, PetroleumType};
 use log::{debug, info, warn};
 use serde::{Deserialize};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use std::collections::{HashMap, HashSet};
-use serde_json::json;
+use std::net::SocketAddr;
+use axum::{Json, Router};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::get;
+use serde_json::{json, Value};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use cygaz_lib::district::{District, DISTRICTS};
 use cygaz_lib::price::PriceList;
@@ -34,7 +39,7 @@ struct AppState {
 }
 
 fn refresh_districts(
-    state: web::Data<AppState>
+    state: Arc<AppState>
 ) {
     debug!("refreshing districts");
 
@@ -85,7 +90,7 @@ fn find_areas_for_district(
 }
 
 fn refresh_price_for_petroleum_type(
-    state: web::Data<AppState>,
+    state: Arc<AppState>,
     p_type: PetroleumType
 ) -> Vec<PetroleumStation> {
     debug!("warming up {}", p_type);
@@ -111,7 +116,7 @@ fn refresh_price_for_petroleum_type(
 }
 
 fn refresh_prices(
-    state: web::Data<AppState>
+    state: Arc<AppState>
 ) {
     debug!("refreshing prices");
 
@@ -191,45 +196,46 @@ fn refresh_prices(
     price_list.updated_at_str = time.1;
 }
 
-#[get("/prices")]
-async fn get_prices(data: web::Data<AppState>) -> impl Responder {
+async fn get_prices(
+    State(data): State<Arc<AppState>>,
+) -> impl IntoResponse {
     let prices = data.prices.read().unwrap();
-    actix_web::web::Json(prices.clone())
+    (StatusCode::OK, Json(prices.clone()))
 }
 
-#[get("/prices/{id}")]
-async fn get_prices_by_district(
-    path: web::Path<String>,
-    data: web::Data<AppState>
-) -> impl Responder {
-    let id = path.into_inner();
+async fn get_prices_by_district_id(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
     let default_price = HashSet::<PetroleumStation>::new();
 
     if !District::is_valid(id.clone()) {
         warn!("district {:?} is invalid", id.clone());
         let time = PriceList::now();
-        return actix_web::web::Json(json!({
+        return (StatusCode::BAD_REQUEST, Json(json!({
             "updated_at": time.0,
             "updated_at_str": time.1,
             "prices": default_price,
-        }));
+        })));
     }
 
-    let lock = data.prices.clone();
+    let lock = state.prices.clone();
     let guard = lock.read().unwrap();
     let prices = guard.prices.get(&id).unwrap_or(&default_price).clone();
 
-    actix_web::web::Json(json!({
-        "updated_at": guard.updated_at,
-        "updated_at_str": guard.updated_at_str,
-        "prices": prices,
-    }))
+    (
+        StatusCode::OK,
+        Json(json!({
+            "updated_at": guard.updated_at,
+            "updated_at_str": guard.updated_at_str,
+            "prices": prices,
+        }))
+    )
 }
 
-#[get("/districts")]
 async fn get_districts(
-    data: web::Data<AppState>,
-) -> impl Responder {
+    State(data): State<Arc<AppState>>,
+) -> impl IntoResponse {
     let areas = data.areas.read().unwrap();
     let mut districts = DISTRICTS.clone();
 
@@ -237,16 +243,14 @@ async fn get_districts(
         district.areas = Some(find_areas_for_district(&district, &areas));
     }
 
-    actix_web::web::Json(districts)
+    (StatusCode::OK, Json(districts))
 }
 
-#[get("/districts/{id}")]
 async fn get_district_by_id(
-    path: web::Path<String>,
-    data: web::Data<AppState>,
-) -> impl Responder {
-    let id = path.into_inner();
-    let areas = data.areas.read().unwrap();
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let areas = state.areas.read().unwrap();
     let mut found_district = District::unknown();
 
     for district in DISTRICTS.iter() {
@@ -257,25 +261,21 @@ async fn get_district_by_id(
     }
 
     found_district.areas = Some(find_areas_for_district(&found_district, &areas));
-    actix_web::web::Json(found_district)
+    (StatusCode::OK, Json(found_district))
 }
 
-#[get("/version")]
-async fn get_version() -> impl Responder {
+async fn get_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-#[get("/ready")]
-async fn get_ready() -> impl Responder {
-    let ready = *READY.get().unwrap_or(&false);
-    if ready {
-        return HttpResponse::Ok().json(serde_json::json!({ "ready": true }));
+async fn get_ready() -> (StatusCode, Json<Value>) {
+    match *READY.get().unwrap_or(&false) {
+        true => ( StatusCode::OK, Json(json!({ "ready": true })) ),
+        false => ( StatusCode::BAD_REQUEST, Json(json!({ "ready": false })) ),
     }
-
-    HttpResponse::BadRequest().json(serde_json::json!({ "ready": false }))
 }
 
-async fn setup_cron(state: web::Data<AppState>) -> JobScheduler {
+async fn setup_cron(state: Arc<AppState>) -> JobScheduler {
     debug!("setting up cron");
 
     let scheduler = JobScheduler::new().await.unwrap();
@@ -306,12 +306,12 @@ async fn main() {
 
     info!("warming up initial cache");
 
-    let state = web::Data::new(AppState {
+    let shared_state = Arc::new(AppState {
         areas: Default::default(),
         prices: Default::default(),
     });
 
-    let data = state.clone();
+    let data = shared_state.clone();
 
     tokio::spawn(async move {
         refresh_districts(data.clone());
@@ -320,7 +320,7 @@ async fn main() {
         READY.set(true)
     });
 
-    let scheduler = setup_cron(state.clone());
+    let scheduler = setup_cron(shared_state.clone());
 
     match scheduler.await.start().await {
         Ok(_) => info!("scheduler started"),
@@ -329,9 +329,19 @@ async fn main() {
 
     info!("starting http server @ {}", address.clone());
 
+    let app = Router::new()
+        .route("/version", get(get_version))
+        .route("/ready", get(get_ready))
+        .route("/prices", get(get_prices))
+        .route("/prices/{id}", get(get_prices_by_district_id))
+        .route("/districts", get(get_districts))
+        .route("/districts/{id}", get(get_district_by_id))
+        .with_state(shared_state);
+
+    /*
     HttpServer::new(move || {
         App::new()
-            .app_data(state.clone())
+            .app_data(shared_state.clone())
             .service(get_prices)
             .service(get_prices_by_district)
             //.service(get_unlead95)
@@ -347,5 +357,14 @@ async fn main() {
         .bind(address)
         .unwrap()
         .run()
-        .await.expect("server failed to start")
+        .await.expect("server failed to start")*/
+
+    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }

@@ -1,16 +1,16 @@
 pub mod district;
 pub mod price;
+pub mod station;
 
+use url::Url;
+use serde_json::json;
 use std::fmt::{Display};
-use std::hash::{Hash, Hasher};
 use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use url::Url;
-use crate::district::District;
 use crate::price::PetroleumPrice;
+use crate::station::PetroleumStation;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum PetroleumType {
@@ -63,37 +63,6 @@ impl Display for CyGazError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
-}
-
-#[derive(Clone, Serialize, Debug)]
-pub struct PetroleumStation {
-    brand: String,
-    offline: bool,
-    company: String,
-    address: String,
-    latitude: String,
-    longitude: String,
-    pub area: String,
-    pub prices: Vec<PetroleumPrice>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub district: Option<District>,
-}
-
-impl Hash for PetroleumStation {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.latitude.hash(state);
-        self.longitude.hash(state);
-    }
-}
-
-impl PartialEq for PetroleumStation {
-    fn eq(&self, other: &Self) -> bool {
-        self.latitude == other.latitude && self.longitude == other.longitude
-    }
-}
-
-impl Eq for PetroleumStation {
-    //
 }
 
 fn extract_address(endpoint: &Url, fragment: &ElementRef) -> Result<(String, String, String), CyGazError> {
