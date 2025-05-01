@@ -34,6 +34,12 @@ impl District {
         }
     }
 
+    pub fn is_valid(district_id: String) -> bool {
+        let mut unknown = Self::unknown();
+        unknown.id = district_id;
+        DISTRICTS.contains(&unknown)
+    }
+
     pub fn unknown() -> Self {
         Self {
             id: "unknown".to_string(),

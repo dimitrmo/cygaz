@@ -7,6 +7,7 @@ use std::thread;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime};
+use serde_json::json;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use cygaz_lib::district::{District, DISTRICTS};
 
@@ -229,12 +230,45 @@ fn refresh_prices(
             }
         }
     }
+
+    let time = PriceListV2::now();
+    price_list.updated_at = time.0;
+    price_list.updated_at_str = time.1;
 }
 
 #[get("/prices")]
 async fn get_prices(data: web::Data<AppState>) -> impl Responder {
     let prices = data.prices.read().unwrap();
     actix_web::web::Json(prices.clone())
+}
+
+#[get("/prices/{id}")]
+async fn get_prices_by_district(
+    path: web::Path<String>,
+    data: web::Data<AppState>
+) -> impl Responder {
+    let id = path.into_inner();
+    let default_price = HashSet::<PetroleumStation>::new();
+
+    if !District::is_valid(id.clone()) {
+        warn!("district {:?} is invalid", id.clone());
+        let time = PriceListV2::now();
+        return actix_web::web::Json(json!({
+            "updated_at": time.0,
+            "updated_at_str": time.1,
+            "prices": default_price,
+        }));
+    }
+
+    let lock = data.prices.clone();
+    let guard = lock.read().unwrap();
+    let prices = guard.prices.get(&id).unwrap_or(&default_price).clone();
+
+    actix_web::web::Json(json!({
+        "updated_at": guard.updated_at,
+        "updated_at_str": guard.updated_at_str,
+        "prices": prices,
+    }))
 }
 
 #[get("/districts")]
@@ -270,37 +304,6 @@ async fn get_district_by_id(
     found_district.areas = Some(find_areas_for_district(&found_district, &areas));
     actix_web::web::Json(found_district)
 }
-
-/*
-#[get("/prices/1")]
-async fn get_unlead95(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
-    let state = data.read().unwrap();
-    state.unlead95.clone()
-}
-
-#[get("/prices/2")]
-async fn get_unlead98(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
-    let state = data.read().unwrap();
-    state.unlead98.clone()
-}
-
-#[get("/prices/3")]
-async fn get_diesel_heat(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
-    let state = data.read().unwrap();
-    state.diesel_heat.clone()
-}
-
-#[get("/prices/4")]
-async fn get_diesel_auto(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
-    let state = data.read().unwrap();
-    state.diesel_auto.clone()
-}
-
-#[get("/prices/5")]
-async fn get_kerosene(data: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
-    let state = data.read().unwrap();
-    state.kerosene.clone()
-}*/
 
 #[get("/version")]
 async fn get_version() -> impl Responder {
@@ -375,6 +378,7 @@ async fn main() {
         App::new()
             .app_data(state.clone())
             .service(get_prices)
+            .service(get_prices_by_district)
             //.service(get_unlead95)
             //.service(get_unlead98)
             //.service(get_diesel_heat)
