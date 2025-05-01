@@ -89,30 +89,23 @@ fn find_areas_for_district(
     }).collect();
 }
 
-fn refresh_price_for_petroleum_type(
+fn fetch_prices_for_petroleum_type(
     state: Arc<AppState>,
     p_type: PetroleumType
 ) -> Vec<PetroleumStation> {
-    debug!("warming up {}", p_type);
+    debug!("fetching prices for {}", p_type);
 
-    let p_state = state.clone();
-    let p_handler = thread::spawn(move || {
-        let mut prices = fetch_prices(p_type).unwrap_or_else(|err| {
-            debug!("Error fetching prices for {}: {}", err, p_type);
-            vec![]
-        });
-
-        let areas = p_state.areas.read().unwrap();
-        for price in prices.iter_mut() {
-            price.district = Some(find_district(&price.area, &areas));
-        }
-
-        prices
+    let mut prices = fetch_prices(p_type).unwrap_or_else(|err| {
+        debug!("Error fetching prices for {}: {}", err, p_type);
+        vec![]
     });
 
-    let result = p_handler.join().unwrap_or_default();
+    let areas = state.areas.read().unwrap();
+    for price in prices.iter_mut() {
+        price.district = Some(find_district(&price.area, &areas));
+    }
 
-    result
+    prices
 }
 
 fn refresh_prices(
@@ -120,39 +113,56 @@ fn refresh_prices(
 ) {
     debug!("refreshing prices");
 
-    let unlead95_stations = refresh_price_for_petroleum_type(
-        state.clone(),
-        PetroleumType::Unlead95
-    );
+    // =============================================================================================
 
+    let unlead95_state = state.clone();
+    let unlead95_handler = thread::spawn(move || {
+        fetch_prices_for_petroleum_type(unlead95_state, PetroleumType::Unlead95)
+    });
+
+    // =============================================================================================
+
+    let unlead98_state = state.clone();
+    let unlead98_handler = thread::spawn(move || {
+        fetch_prices_for_petroleum_type(unlead98_state, PetroleumType::Unlead98)
+    });
+
+    // =============================================================================================
+
+    let diesel_heat_state = state.clone();
+    let diesel_heat_handler = thread::spawn(move || {
+        fetch_prices_for_petroleum_type(diesel_heat_state, PetroleumType::DieselHeat)
+    });
+
+    // =============================================================================================
+
+    let diesel_auto_state = state.clone();
+    let diesel_auto_handler = thread::spawn(move || {
+        fetch_prices_for_petroleum_type(diesel_auto_state, PetroleumType::DieselAuto)
+    });
+
+    // =============================================================================================
+
+    let kerosene_state = state.clone();
+    let kerosene_handler = thread::spawn(move || {
+        fetch_prices_for_petroleum_type(kerosene_state, PetroleumType::Kerosene)
+    });
+
+    // =============================================================================================
+
+    let unlead95_stations = unlead95_handler.join().unwrap_or_default();
     debug!("downloaded {} stations for {}", unlead95_stations.len(), PetroleumType::Unlead95);
 
-    let unlead98_stations = refresh_price_for_petroleum_type(
-        state.clone(),
-        PetroleumType::Unlead98
-    );
-
+    let unlead98_stations = unlead98_handler.join().unwrap_or_default();
     debug!("downloaded {} stations for {}", unlead98_stations.len(), PetroleumType::Unlead98);
 
-    let diesel_heat_stations = refresh_price_for_petroleum_type(
-        state.clone(),
-        PetroleumType::DieselHeat
-    );
-
+    let diesel_heat_stations = diesel_heat_handler.join().unwrap_or_default();
     debug!("downloaded {} stations for {}", diesel_heat_stations.len(), PetroleumType::DieselHeat);
 
-    let diesel_auto_stations = refresh_price_for_petroleum_type(
-        state.clone(),
-        PetroleumType::DieselAuto
-    );
-
+    let diesel_auto_stations = diesel_auto_handler.join().unwrap_or_default();
     debug!("downloaded {} stations for {}", diesel_auto_stations.len(), PetroleumType::DieselAuto);
 
-    let kerosene_stations = refresh_price_for_petroleum_type(
-        state.clone(),
-        PetroleumType::Kerosene
-    );
-
+    let kerosene_stations = kerosene_handler.join().unwrap_or_default();
     debug!("downloaded {} stations for {}", kerosene_stations.len(), PetroleumType::Kerosene);
 
     let mut price_list = state.prices.write().unwrap();
