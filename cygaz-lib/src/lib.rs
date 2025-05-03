@@ -9,6 +9,7 @@ use std::string::ToString;
 use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
+use any_ascii::any_ascii;
 use crate::price::PetroleumPrice;
 use crate::station::PetroleumStation;
 
@@ -127,6 +128,11 @@ pub fn fetch_areas_for_district(district: String) -> Result<Vec<Area>, CyGazErro
     Ok(data.unwrap())
 }
 
+fn transliterate(original: &str) -> (String, String) {
+    let english = any_ascii(original);
+    (original.to_string(), english)
+}
+
 pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStation>, CyGazError> {
     let client = reqwest::blocking::Client::builder()
         .cookie_store(true)
@@ -218,6 +224,8 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     price.inner_html().trim().to_string()
                 );
 
+                let (area_el, area_en) = transliterate(area.inner_html().trim());
+
                 let station = PetroleumStation {
                     brand: brand.inner_html().trim().to_string(),
                     offline: offline.is_some(),
@@ -225,7 +233,8 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
                     address: address_txt,
                     latitude: address_lat,
                     longitude: address_lon,
-                    area: area.inner_html().trim().to_string(),
+                    area_en,
+                    area_el,
                     prices: vec![p_price],
                     district: None,
                 };

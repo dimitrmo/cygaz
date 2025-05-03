@@ -11,7 +11,8 @@ pub struct PetroleumStation {
     pub(crate) address: String,
     pub(crate) latitude: String,
     pub(crate) longitude: String,
-    pub area: String,
+    pub area_en: String,
+    pub area_el: String,
     pub prices: Vec<PetroleumPrice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub district: Option<District>,

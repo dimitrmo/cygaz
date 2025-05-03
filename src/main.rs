@@ -102,7 +102,7 @@ fn fetch_prices_for_petroleum_type(
 
     let areas = state.areas.read().unwrap();
     for price in prices.iter_mut() {
-        price.district = Some(find_district(&price.area, &areas));
+        price.district = Some(find_district(&price.area_el, &areas));
     }
 
     prices
