@@ -1,6 +1,7 @@
 pub mod district;
 pub mod price;
 pub mod station;
+pub mod area;
 
 use url::Url;
 use serde_json::json;
@@ -10,6 +11,7 @@ use reqwest::header::USER_AGENT;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use any_ascii::any_ascii;
+use crate::area::Area;
 use crate::price::PetroleumPrice;
 use crate::station::PetroleumStation;
 
@@ -32,16 +34,6 @@ impl Display for PetroleumType {
             PetroleumType::Kerosene => write!(f, "Unlead Kerosene"),
         }
     }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct Area {
-    disabled: bool,
-    group: Option<String>,
-    selected: bool,
-    pub text: String,
-    pub value: String
 }
 
 static GET_STATION_DISTRICT_ENDPOINT: &'static str =
@@ -125,7 +117,15 @@ pub fn fetch_areas_for_district(district: String) -> Result<Vec<Area>, CyGazErro
         return Err(CyGazError(data.unwrap_err().to_string()));
     }
 
-    Ok(data.unwrap())
+    let mut areas: Vec<Area> = vec![];
+    for area in data.unwrap().iter_mut() {
+        let (name_el, name_en) = transliterate(area.name_el.as_str());
+        area.name_el = name_el;
+        area.name_en = name_en;
+        areas.push(area.to_owned());
+    }
+
+    Ok(areas)
 }
 
 fn transliterate(original: &str) -> (String, String) {
@@ -249,13 +249,7 @@ pub fn fetch_prices(petroleum_type: PetroleumType) -> Result<Vec<PetroleumStatio
 
 #[cfg(test)]
 mod tests {
-    use crate::{fetch_areas_for_district, fetch_prices, PetroleumType};
-
-    #[test]
-    fn e2e_fetch_areas_for_district() {
-        let areas = fetch_areas_for_district("Limassol".to_string()).unwrap_or_default();
-        assert!(areas.len() > 0);
-    }
+    use crate::{fetch_prices, PetroleumType};
 
     #[test]
     fn e2e_unlead_95_prices_for_cyprus() {

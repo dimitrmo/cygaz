@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use crate::area::Area;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename(serialize = "lowercase", deserialize = "PascalCase"))]
@@ -11,7 +12,7 @@ pub struct District {
     #[serde(rename = "district_el")]
     pub name_el: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub areas: Option<Vec<String>>
+    pub areas: Option<Vec<Area>>
 }
 
 impl PartialEq for District {

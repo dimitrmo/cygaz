@@ -12,6 +12,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use serde_json::{json, Value};
 use tokio_cron_scheduler::{Job, JobScheduler};
+use cygaz_lib::area::Area;
 use cygaz_lib::district::{District, DISTRICTS};
 use cygaz_lib::price::PriceList;
 
@@ -34,34 +35,44 @@ struct Config {
 }
 
 struct AppState {
-    areas: Arc<RwLock<HashMap<String, District>>>,
+    areas: Arc<RwLock<HashMap<String, Area>>>,
+    areas_with_districts: Arc<RwLock<HashMap<String, District>>>,
     prices: Arc<RwLock<PriceList>>
 }
 
-fn refresh_districts(
+fn refresh_areas_and_districts(
     state: Arc<AppState>
 ) {
     debug!("refreshing districts");
 
     let t = thread::spawn(|| {
-        let mut output: HashMap<String, District> = HashMap::new();
+        let mut awd_output: HashMap<String, District> = HashMap::new();
+        let mut areas_output: HashMap<String, Area> = HashMap::new();
 
         for district in DISTRICTS.iter() {
+            // English name is used in the external API
             let areas = fetch_areas_for_district(district.name_en.clone()).unwrap_or_default();
             for area in areas {
-                output.insert(area.text, district.clone());
-                output.insert(area.value, district.clone());
+                let a0 = area.clone();
+                awd_output.insert(area.name_el.clone(), district.clone());
+                awd_output.insert(area.name_en.clone(), district.clone());
+                areas_output.insert(area.name_el, a0.clone());
+                areas_output.insert(area.name_en, a0);
             }
         }
 
-        output
+        ( awd_output, areas_output )
     });
 
-    let result = t.join().unwrap_or_default();
+    let (awd_result, areas_result) = t.join().unwrap_or_default();
 
-    let mut lock = state.areas.write().unwrap();
+    let mut awd_lock = state.areas_with_districts.write().unwrap();
+    *awd_lock = awd_result;
+    drop(awd_lock);
 
-    *lock = result
+    let mut areas_lock = state.areas.write().unwrap();
+    *areas_lock = areas_result;
+    drop(areas_lock);
 }
 
 fn find_district(
@@ -78,15 +89,16 @@ fn find_district(
 
 fn find_areas_for_district(
     district: &District,
-    districts: &HashMap<String, District>
-) -> Vec<String> {
-    return districts.iter().filter_map(|z| {
+    areas_with_districts: &HashMap<String, District>,
+    areas: &HashMap<String, Area>,
+) -> Vec<Area> {
+    return areas_with_districts.iter().filter_map(|z| {
         if z.1.eq(district) {
-            return Some(z.0.clone())
+            return areas.get(z.0);
         }
 
         return None
-    }).collect();
+    }).cloned().collect();
 }
 
 fn fetch_prices_for_petroleum_type(
@@ -100,7 +112,7 @@ fn fetch_prices_for_petroleum_type(
         vec![]
     });
 
-    let areas = state.areas.read().unwrap();
+    let areas = state.areas_with_districts.read().unwrap();
     for price in prices.iter_mut() {
         price.district = Some(find_district(&price.area_el, &areas));
     }
@@ -257,11 +269,12 @@ async fn get_prices_by_district_id(
 async fn get_districts(
     State(data): State<Arc<AppState>>,
 ) -> impl IntoResponse {
+    let awd = data.areas_with_districts.read().unwrap();
     let areas = data.areas.read().unwrap();
     let mut districts = DISTRICTS.clone();
 
     for district in &mut districts {
-        district.areas = Some(find_areas_for_district(&district, &areas));
+        district.areas = Some(find_areas_for_district(&district, &awd, &areas));
     }
 
     (StatusCode::OK, Json(districts))
@@ -271,6 +284,7 @@ async fn get_district_by_id(
     Path(id): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
+    let awd = state.areas_with_districts.read().unwrap();
     let areas = state.areas.read().unwrap();
     let mut found_district = District::unknown();
 
@@ -281,7 +295,7 @@ async fn get_district_by_id(
         }
     }
 
-    found_district.areas = Some(find_areas_for_district(&found_district, &areas));
+    found_district.areas = Some(find_areas_for_district(&found_district, &awd, &areas));
     (StatusCode::OK, Json(found_district))
 }
 
@@ -330,14 +344,15 @@ async fn main() {
     info!("warming up initial cache");
 
     let shared_state = Arc::new(AppState {
-        areas: Default::default(),
         prices: Default::default(),
+        areas: Default::default(),
+        areas_with_districts: Default::default(),
     });
 
     let data = shared_state.clone();
 
     tokio::spawn(async move {
-        refresh_districts(data.clone());
+        refresh_areas_and_districts(data.clone());
         refresh_prices(data);
         info!("data cache ready");
         READY.set(true)
