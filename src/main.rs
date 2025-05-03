@@ -98,7 +98,7 @@ fn find_areas_for_district(
         }
 
         return None
-    }).cloned().collect();
+    }).cloned().collect::<HashSet<_>>().into_iter().collect();
 }
 
 fn fetch_prices_for_petroleum_type(

@@ -25,6 +25,12 @@ impl Eq for District {
     //
 }
 
+impl Hash for District {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl District {
     pub fn new(name_en: String, name_el: String) -> Self {
         Self {
@@ -48,12 +54,6 @@ impl District {
             name_el: "Αγνωστο".to_string(),
             areas: None
         }
-    }
-}
-
-impl Hash for District {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
     }
 }
 
