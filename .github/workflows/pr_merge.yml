@@ -39,7 +39,7 @@ jobs:
       - Setup
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Git setup
         run: |
@@ -95,7 +95,7 @@ jobs:
       - Publish
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Git setup
         run: |
