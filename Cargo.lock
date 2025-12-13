@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "cygaz"
-version = "0.1.162"
+version = "0.1.163"
 dependencies = [
  "axum",
  "cygaz-lib",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "cygaz-lib"
-version = "0.1.162"
+version = "0.1.163"
 dependencies = [
  "any_ascii",
  "chrono",
