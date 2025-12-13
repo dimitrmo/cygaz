@@ -1,4 +1,4 @@
-FROM rust:1.89-slim-trixie AS builder
+FROM rust:1.92-slim-trixie AS builder
 
 RUN apt-get update \
     && apt-get install -y \
@@ -13,7 +13,7 @@ COPY . .
 
 RUN cargo install --path .
 
-FROM debian:trixie-slim
+FROM debian:13.2-slim
 
 RUN apt-get update \
     && apt-get install -y \
